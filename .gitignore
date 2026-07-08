@@ -4,3 +4,5 @@ __pycache__/
 .env
 target/
 test-ledger/
+out/dashboard.html
+out/artifact.html

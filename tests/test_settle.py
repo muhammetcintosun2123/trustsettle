@@ -147,6 +147,15 @@ def test_encoder_builds_valid_instruction():
     assert len(ix.accounts) == 3 and ix.accounts[0].pubkey == maker
 
 
+def test_dashboard_builds_self_contained():
+    from settle import web
+    p = web.build()
+    html = p.read_text()
+    assert "/*__DATA__*/" not in html                 # data injected
+    assert '"settle"' in html and "forged_rejected" in html
+    assert "http://" not in html and "https://" not in html   # no external deps
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
