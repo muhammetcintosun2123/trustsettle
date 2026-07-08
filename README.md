@@ -58,6 +58,7 @@ python -m settle.onchain         # read the live on-chain order book (real trade
 python -m settle.web --open      # self-contained visual dashboard (one HTML file)
 python -m settle.live         # open a market on a REAL World Cup fixture (live feed)
 python -m settle.prodash --snapshot --open   # professional dApp dashboard (real on-chain data)
+python serve.py                # ⭐ LIVE screen: real order book + run create→join→settle on-chain → http://localhost:8789
 python -m pytest -q              # the trust primitive + settlement logic
 ```
 
