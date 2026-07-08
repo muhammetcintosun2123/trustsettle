@@ -49,6 +49,8 @@ pip install pycryptodome solders httpx
 python -m settle.demo            # full trustless settlement, plus a rejected forgery
 python -m settle.onchain         # read the live on-chain order book (real trades)
 python -m settle.web --open      # self-contained visual dashboard (one HTML file)
+python -m settle.live         # open a market on a REAL World Cup fixture (live feed)
+python -m settle.prodash --snapshot --open   # professional dApp dashboard (real on-chain data)
 python -m pytest -q              # the trust primitive + settlement logic
 ```
 

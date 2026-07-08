@@ -161,3 +161,19 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
     print("all settlement tests passed ✓")
+
+
+def test_prodash_builds_from_snapshot():
+    import json
+    from settle import prodash
+    snap = {"book": [{"id": "12345678", "maker": "9Ags…aBcd", "fixture": 17588234,
+            "stake": 1.0, "state": "OPEN"}], "book_fixtures": 1, "book_makers": 1,
+            "fixtures": [{"id": 18209181, "home": "France", "away": "Morocco"}],
+            "root": "ab" * 32, "leaf": "cd" * 6, "fold": ["cd" * 6, "ef" * 6],
+            "proof": [{"hash": "ef" * 6, "right": True}],
+            "settle": {"winner": "Alice", "payout": 200, "proven": "3 goals > 2"},
+            "forged_rejected": True, "market_fixture": {"id": 18209181, "home": "France", "away": "Morocco"}}
+    prodash._SNAP.write_text(json.dumps(snap))
+    html = prodash.build().read_text()
+    assert "/*__DATA__*/" not in html and "France" in html
+    assert "https://" not in html.replace("http://www.w3.org", "")
