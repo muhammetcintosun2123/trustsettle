@@ -176,4 +176,10 @@ def test_prodash_builds_from_snapshot():
     prodash._SNAP.write_text(json.dumps(snap))
     html = prodash.build().read_text()
     assert "/*__DATA__*/" not in html and "France" in html
-    assert "https://" not in html.replace("http://www.w3.org", "")
+    # self-contained for rendering: no external scripts/styles/fetches. Explorer <a href>
+    # links (navigation, not resource loads) and the SVG namespace are allowed.
+    allowed = ("http://www.w3.org", "https://explorer.solana.com")
+    stripped = html
+    for a in allowed:
+        stripped = stripped.replace(a, "")
+    assert "http://" not in stripped and "https://" not in stripped
