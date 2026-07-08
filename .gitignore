@@ -6,3 +6,4 @@ target/
 test-ledger/
 out/dashboard.html
 out/artifact.html
+out/
