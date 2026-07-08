@@ -64,13 +64,23 @@ def _regen_snapshot() -> None:
         root=tree.root.hex(), leaf=home.leaf().hex()[:12], fold=fold,
         proof=[dict(hash=p.hash.hex()[:12], right=p.is_right_sibling) for p in proof],
         settle=dict(winner=winner, payout=m.payout, proven="2 + 1 = 3 goals > 2"),
-        forged_rejected=forged, market_fixture=(fixtures[0] if fixtures else None))))
+        forged_rejected=forged, market_fixture=(fixtures[0] if fixtures else None),
+        deployed=DEPLOYED)))
+
+
+# The settlement program is LIVE on Solana devnet — proven with real transactions.
+DEPLOYED = dict(
+    program="HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa",
+    settle_tx="3LcPKm8n8cH3k7qvUYGiv5VSa6fQKYSxoPDDQ7s3eNsnjyxcigx7tNvKyriKmAzct3ncH6fQPjU1b13gvjfNKHT6",
+    explorer="https://explorer.solana.com/address/HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa?cluster=devnet",
+)
 
 
 def build() -> Path:
     if not _SNAP.exists():
         _regen_snapshot()
     data = json.loads(_SNAP.read_text())
+    data.setdefault("deployed", DEPLOYED)      # deployed proof is always shown
     html = _TEMPLATE.replace("/*__DATA__*/", json.dumps(data))
     _OUT.parent.mkdir(parents=True, exist_ok=True)
     _OUT.write_text(html)
@@ -134,10 +144,11 @@ td.m,.mono{font-family:var(--mono);font-size:12px;color:var(--mut)}
 <body><div class="wrap">
 <div class="bar"><span class="brand">Trust<b>Settle</b></span>
   <span class="badge"><span class="d"></span>LIVE · Solana devnet</span>
-  <span class="src" id="src">deployed txoracle program</span>
+  <span class="src" id="src">deployed settlement program</span>
 </div>
 <h1>Trustless prediction-market settlement.</h1>
-<p class="lede">No oracle, no admin key. Payouts fire only against score data proven under the Merkle root TxODDS anchors on Solana. Left: the real order book on the deployed program. Right: the settlement engine, and the proof that makes it trustless.</p>
+<p class="lede">No oracle, no admin key. Payouts fire only against score data proven under the Merkle root anchored on Solana. Left: the real order book on the deployed program. Right: the settlement engine, and the proof that makes it trustless.</p>
+<div id="deployed" style="margin:0 0 16px"></div>
 <div class="grid">
   <div class="panel">
     <h2>Live on-chain order book</h2>
@@ -159,10 +170,15 @@ td.m,.mono{font-family:var(--mono);font-size:12px;color:var(--mut)}
     <div class="result block" id="res-block"></div>
   </div>
 </div>
-<p class="foot">the same <code>ProofNode</code> fold runs on-chain via CPI into <code>validate_stat</code></p>
+<p class="foot">this keccak <code>ProofNode</code> fold runs <b>on-chain</b> in the deployed program — settlement only pays when it matches the anchored root</p>
 </div>
 <script>
 const D=/*__DATA__*/;const $=id=>document.getElementById(id);
+if(D.deployed){$("deployed").innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:linear-gradient(90deg,color-mix(in srgb,var(--good) 14%,transparent),transparent);border:1px solid color-mix(in srgb,var(--good) 40%,transparent);border-radius:12px;padding:11px 14px">
+ <span class="k-good" style="font-weight:800">✓ DEPLOYED & PROVEN ON-CHAIN</span>
+ <span class="mono" style="font-size:12px">program <a href="${D.deployed.explorer}" style="color:var(--mint)">${D.deployed.program.slice(0,8)}…${D.deployed.program.slice(-4)}</a></span>
+ <span class="mono" style="font-size:12px">· settle tx <a href="https://explorer.solana.com/tx/${D.deployed.settle_tx}?cluster=devnet" style="color:var(--mint)">${D.deployed.settle_tx.slice(0,10)}…</a></span>
+ <span style="font-size:12px;color:var(--mut)">· real create→join→settle on devnet, forged score rejected</span></div>`;}
 $("s-o").textContent=D.book.length;$("s-m").textContent=D.book_makers;$("s-f").textContent=D.book_fixtures;
 const tb=$("book");
 if(D.book.length){D.book.forEach(o=>{const tr=document.createElement("tr");

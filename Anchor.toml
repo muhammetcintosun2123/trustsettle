@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-settlement = "Trust5ett1e1111111111111111111111111111111"
+settlement = "3QTsMg6sBE3udUmNhzBY5LQ7xZL48cTSL8WqT5L9ZrJd"
 
 [registry]
 url = "https://api.apr.dev"

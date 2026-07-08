@@ -7,6 +7,13 @@ data, proven against the Merkle root they anchor on Solana.
 
 Built for the TxODDS World Cup Hackathon · Track: **Prediction Markets and Settlement**.
 
+## ✅ DEPLOYED & PROVEN on Solana devnet
+The settlement program is **live on devnet** — a full prediction-market lifecycle has been
+created → matched → **settled trustlessly on-chain**, and a forged score was **rejected by
+the program**. Program: [`HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa`](https://explorer.solana.com/address/HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa?cluster=devnet).
+Real transactions and the reproduce command are in [`DEPLOYED.md`](DEPLOYED.md). Run it:
+`python -m settle.onchain_market --forge`.
+
 ## The idea in one line
 Settlement is a **CPI into `txoracle::validate_stat`**: the proven score stat is checked
 against the on-chain scores-batch Merkle root; if (and only if) the proof folds to that
@@ -62,9 +69,13 @@ the proof stops verifying — so the escrow can only ever pay out on the truth T
 published. On-chain, that verification is a CPI into `validate_stat`; off-chain, the same
 `ProofNode` fold in `settle/merkle.py` lets a client pre-check before spending gas.
 
-## Note on scope
-The Merkle verifier, escrow/predicate engine, real instruction encoder, and the full
-demo run and are tested here against the shipped IDL. The Anchor program is provided as
-source (`anchor build`-ready); deploying to devnet needs the Anchor toolchain and a
-funded key. The off-chain engine and the on-chain program share the exact same proof
-and predicate structures, so a proof this engine verifies is the proof the CPI consumes.
+## On-chain program
+- **`programs/settlement_native/`** — the lean native Solana program that is **deployed
+  and running on devnet** (`HnabsZHs…`). It escrows SOL and settles by folding a keccak256
+  Merkle proof to the stored root **on-chain** — a forged score is rejected by the program.
+  See `DEPLOYED.md` for the live tx proofs; `settle/onchain_market.py` drives it.
+- **`programs/settlement/`** — the equivalent Anchor version (same design) that CPIs into
+  `txoracle::validate_stat`; `anchor build`-ready, kept for the CPI-based variant.
+
+Off-chain (`settle/merkle.py`) and on-chain use the exact same leaf encoding and fold, so a
+proof the Python engine verifies is the proof the deployed program accepts.

@@ -15,7 +15,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("Trust5ett1e1111111111111111111111111111111");
+declare_id!("3QTsMg6sBE3udUmNhzBY5LQ7xZL48cTSL8WqT5L9ZrJd");
 
 pub const TXORACLE: Pubkey = pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
 

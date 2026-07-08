@@ -12,3 +12,6 @@ txline/devnet_key.json
 txline/mainnet_token.json
 txline/mainnet_key.json
 out_snapshot.json
+**/target/
+**/*keypair*.json
+programs/settlement_native/target/

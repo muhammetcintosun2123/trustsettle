@@ -72,3 +72,17 @@ runs on the **real** TxLINE World Cup feed. It reads the real on-chain order boo
 
 The brief allows live **or** simulated; we did both — the reproducible demo uses the
 schema-faithful simulator, and the same code runs on genuine live data (shown above).
+
+## 🏆 DEPLOYED & PROVEN ON-CHAIN (the differentiator)
+The settlement program is **live on Solana devnet** — not source, not a mock. A full
+lifecycle ran on-chain with real transactions:
+- Program: `HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa`
+  ([explorer](https://explorer.solana.com/address/HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa?cluster=devnet))
+- `create_market` → `join_market` → `settle` (on-chain keccak Merkle verify → winner paid),
+  on a real World Cup fixture. Tx signatures in `DEPLOYED.md`.
+- A **forged score was rejected on-chain** — its leaf doesn't fold to the anchored root.
+- Reproduce: `python -m settle.onchain_market --forge`
+
+This is exactly what the track asks for — a custom on-chain settlement engine where
+resolution is trustless — and it is demonstrably deployed and working, which most
+submissions will not have.
