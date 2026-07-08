@@ -86,3 +86,12 @@ lifecycle ran on-chain with real transactions:
 This is exactly what the track asks for — a custom on-chain settlement engine where
 resolution is trustless — and it is demonstrably deployed and working, which most
 submissions will not have.
+
+## 🥇 Settlement validated by TxODDS's OWN on-chain primitive
+The track asks for settlement via `validate_stat`. We do exactly that — against real data:
+`python -m settle.real_validate` fetches a real fixture's proof from `/api/scores/stat-validation`,
+and calls TxODDS's own on-chain `validate_stat` against the anchored `daily_scores_roots`
+root. Their program confirms the real score on-chain (`predicate → true`) and **rejects a
+forged value on-chain**. No trust in us, no reimplementation — the oracle's own program is
+the judge. (We found the proof-serving endpoint + on-chain-validation recipe in TxODDS's
+own `tx-on-chain` examples repo, so this needed no extra info from the team.)

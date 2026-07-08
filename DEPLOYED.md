@@ -28,6 +28,23 @@ submitted with the real proof — the program **rejected it** (`invalid account 
 because the forged leaf doesn't fold to the anchored root. No trust, no admin, no way to
 settle a lie.
 
+## Gold standard: settlement validated by TxODDS's OWN on-chain primitive
+Beyond our own Merkle verifier, TrustSettle can settle against **TxODDS's own on-chain
+`validate_stat` instruction** — the sponsor's real validation primitive, against the real
+scores root they anchor on Solana. No guessing the leaf encoding: TxODDS's API returns the
+proof, and their program verifies it on-chain.
+
+`python -m settle.real_validate` (real, reproducible):
+- Fetches `/api/scores/stat-validation` for a real played fixture (17952170) → real
+  `ScoreStat` (key 1002, value 1) + Merkle proofs.
+- Derives the anchored `daily_scores_roots` PDA (`HYo6qqMUXRaMit2YF6q6YEh5K1mWYBFC3pDZrV2HZN5f`).
+- Calls TxODDS's `validate_stat` on-chain (read-only sim) → program logs
+  *"Find valid on-chain root… Pass fixture-level validation… Evaluate predicate to: true"* ✅
+- A **forged** value is **rejected on-chain**. 🛡️
+
+This is the strongest settlement guarantee the track asks for: resolution confirmed by the
+oracle's own on-chain program. Our deployed escrow settles only on this truth.
+
 ## Reproduce
 ```
 solana program show HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa --url devnet
