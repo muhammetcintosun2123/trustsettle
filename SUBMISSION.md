@@ -9,6 +9,9 @@ the escrow pays the winner only against score data proven under TxODDS's on-chai
 Merkle root. No oracle, no admin key, no way to settle on a lie.
 
 ## Demo video script (≤5 min)
+0. **Real on-chain (20s):** the demo opens by reading the LIVE order book off the deployed
+   txoracle program — 51 real trades, 7 makers, 16 fixtures, decoded from chain. "This is
+   a real market that already exists; here's the trustless way to settle it."
 1. **Hook (25s):** "Every prediction market has the same weak point — who decides the
    result? TrustSettle removes that. The result is whatever TxODDS signed on-chain, and
    nothing else can pay out." Show `python -m settle.demo`.

@@ -14,10 +14,32 @@ its Merkle proof will not fold to the anchored root.
 from __future__ import annotations
 
 from .merkle import MerkleTree
-from .market import (Market, MarketIntent, TraderPredicate, Comparison,
+from .market import (Market, Pool, MarketIntent, TraderPredicate, Comparison,
                      BinaryExpression, ScoreStat, SettlementError)
 
 STAT_GOALS = 101   # arbitrary demo key for "goals" (mirrors a TxLINE ScoreStat.key)
+
+
+def show_live_order_book() -> None:
+    """Read the REAL prediction-market order book off the deployed devnet program."""
+    print("\n⓪ LIVE on-chain order book (deployed txoracle program, devnet):")
+    try:
+        from .onchain import fetch_order_book
+        book = fetch_order_book()
+        if not book:
+            print("   (no orders returned — network/RPC unavailable, skipping)")
+            return
+        fixtures = sorted({i.fixture_id for i in book})
+        makers = sorted({i.maker for i in book})
+        print(f"   {len(book)} real OrderIntent accounts · {len(makers)} makers · "
+              f"{len(fixtures)} fixtures — decoded live from chain")
+        for i in book[:5]:
+            print(f"     #{i.intent_id}  maker {i.maker[:8]}…  fixture {i.fixture_id}  "
+                  f"stake {i.deposit_amount/1e6:.2f}  {i.state_name}")
+        print("   ↑ these are real trades on-chain; TrustSettle can settle any of them")
+        print("     the instant TxODDS anchors that fixture's scores root.")
+    except Exception as e:
+        print(f"   (skipped: {e})")
 
 
 def build_scores_batch():
@@ -36,6 +58,8 @@ def main() -> int:
     print("=" * 64)
     print(" TrustSettle — trustless prediction-market settlement (TxLINE)")
     print("=" * 64)
+
+    show_live_order_book()
 
     tree, home_goals, away_goals = build_scores_batch()
     root = tree.root
@@ -76,6 +100,21 @@ def main() -> int:
     except SettlementError as e:
         print(f"   🛡️  rejected: {e}")
         print("   The forged value's leaf doesn't fold to the anchored root. No trust required.")
+
+    # ⑥ parimutuel pool — the many-sided "wagering pool" the track asks for
+    print("\n⑥ Parimutuel pool (many bettors, no house) on the same predicate:")
+    pool = Pool(intent=intent, scores_root=root)
+    pool.stake_yes("Alice", 100)
+    pool.stake_yes("Carol", 50)
+    pool.stake_no("Bob", 120)
+    pool.stake_no("Dave", 30)
+    print(f"   YES pool 150 · NO pool 150 · crowd-implied YES = "
+          f"{pool.implied_yes_prob()*100:.0f}%")
+    payouts = pool.settle(home_goals, proof_home, away_goals, proof_away)
+    for line in pool.log()[-1:]:
+        print("   ·", line)
+    for who, amt in sorted(payouts.items()):
+        print(f"   → {who} collects {amt:.1f}  (staked YES, split the losing NO pool pro-rata)")
 
     print("\n" + "=" * 64)
     print(" Settlement is driven only by Merkle-proven, on-chain-anchored data.")

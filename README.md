@@ -13,14 +13,24 @@ against the on-chain scores-batch Merkle root; if (and only if) the proof folds 
 root, the predicate is evaluated on the proven value and the escrow pays the winner.
 A forged score can't settle — its leaf won't fold to the anchored root.
 
+## It reads the REAL on-chain market (not a mock)
+`settle/onchain.py` reads the live prediction-market order book straight off the deployed
+txoracle program on Solana devnet — **51 real `OrderIntent` accounts across 7 makers and
+16 World Cup fixtures**, decoded from account data using the on-chain IDL layout. The demo
+opens by printing them. TrustSettle can settle any of those real trades the instant TxODDS
+anchors that fixture's scores root. This is public chain state — no API token needed.
+
 ## What's here
+- **`settle/onchain.py`** — reads & decodes the live on-chain order book (real trades).
 - **`settle/merkle.py`** — the trust primitive: a keccak256 Merkle verifier that
   reproduces the on-chain proof check, using the exact `ProofNode { hash, is_right_sibling }`
   shape from the txoracle IDL. This is the "custom validation logic using TxLINE's
   primitives" the track explicitly says it values.
 - **`settle/market.py`** — the escrow + predicate engine, modelling `MarketIntentParams`,
-  `TraderPredicate`, `ScoreStat`, `StatTerm` faithfully. Settlement verifies the proof
-  before paying out.
+  `TraderPredicate`, `ScoreStat`, `StatTerm` faithfully. Two market types: 1-v-1 escrow
+  **and** a many-sided **parimutuel pool** (the "wagering pool" the track asks for —
+  crowd-set price, losing pool split pro-rata among winners). Both settle only on a
+  verified proof.
 - **`settle/txoracle.py`** — real wiring to the deployed devnet program: builds the
   actual `create_intent` instruction (correct 8-byte discriminator loaded from the IDL +
   Borsh args) and derives the PDA the program expects. Tests assert the discriminator

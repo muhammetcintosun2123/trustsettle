@@ -148,3 +148,77 @@ class Market:
 
     def log(self) -> List[str]:
         return list(self._log)
+
+
+@dataclass
+class Pool:
+    """A parimutuel wagering pool — the many-sided version the track calls for.
+
+    Instead of one maker vs one taker, any number of bettors stake on YES or NO of the
+    same predicate. When the outcome is proven (same Merkle check), the entire losing
+    pool is split among the winners pro-rata to their stake. No house, no fixed odds:
+    the price is set by how the crowd stakes, and settlement is still trustless — it
+    only fires against a Merkle-proven, on-chain-anchored score.
+    """
+    intent: MarketIntent
+    scores_root: bytes
+    yes: dict = field(default_factory=dict)     # bettor -> stake (predicate TRUE)
+    no: dict = field(default_factory=dict)      # bettor -> stake (predicate FALSE)
+    settled: bool = False
+    outcome: Optional[bool] = None
+    payouts: dict = field(default_factory=dict)
+    _log: List[str] = field(default_factory=list)
+
+    def stake_yes(self, bettor: str, amount: int) -> None:
+        self._add(self.yes, bettor, amount, "YES")
+
+    def stake_no(self, bettor: str, amount: int) -> None:
+        self._add(self.no, bettor, amount, "NO")
+
+    def _add(self, side: dict, bettor: str, amount: int, label: str) -> None:
+        if self.settled:
+            raise SettlementError("pool already settled")
+        if amount <= 0:
+            raise SettlementError("stake must be positive")
+        side[bettor] = side.get(bettor, 0) + amount
+        self._log.append(f"{bettor} stakes {amount} on {label}")
+
+    def total(self) -> int:
+        return sum(self.yes.values()) + sum(self.no.values())
+
+    def implied_yes_prob(self) -> float:
+        """Crowd-implied probability of YES = YES pool / total (parimutuel price)."""
+        t = self.total()
+        return (sum(self.yes.values()) / t) if t else 0.0
+
+    def settle(self, stat_a: ScoreStat, proof_a: List[ProofNode],
+               stat_b: Optional[ScoreStat] = None,
+               proof_b: Optional[List[ProofNode]] = None) -> dict:
+        """Trustless parimutuel settlement against a Merkle-proven score."""
+        if self.settled:
+            raise SettlementError("already settled")
+        if not verify(stat_a.leaf(), proof_a, self.scores_root):
+            raise SettlementError("stat_a Merkle proof does not verify against the anchored root")
+        if self.intent.stat_b_key is not None:
+            if stat_b is None or proof_b is None:
+                raise SettlementError("intent needs a proven stat_b")
+            if not verify(stat_b.leaf(), proof_b, self.scores_root):
+                raise SettlementError("stat_b Merkle proof does not verify")
+
+        yes_wins = self.intent.evaluate(stat_a, stat_b)
+        self.outcome = yes_wins
+        winners, losers = (self.yes, self.no) if yes_wins else (self.no, self.yes)
+        win_total = sum(winners.values())
+        lose_total = sum(losers.values())
+        # each winner reclaims their own stake + a pro-rata share of the losing pool
+        for bettor, stake in winners.items():
+            share = (stake / win_total) * lose_total if win_total else 0
+            self.payouts[bettor] = round(stake + share, 6)
+        self.settled = True
+        self._log.append(
+            f"settled: {'YES' if yes_wins else 'NO'} on proven stat={stat_a.value}; "
+            f"{lose_total} losing pool split among {len(winners)} winners")
+        return dict(self.payouts)
+
+    def log(self) -> List[str]:
+        return list(self._log)

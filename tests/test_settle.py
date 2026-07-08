@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from settle.merkle import MerkleTree, ProofNode, verify, keccak256
-from settle.market import (Market, MarketIntent, TraderPredicate, Comparison,
+from settle.market import (Market, Pool, MarketIntent, TraderPredicate, Comparison,
                            BinaryExpression, ScoreStat, SettlementError)
 from settle import txoracle
 from solders.pubkey import Pubkey
@@ -92,6 +92,41 @@ def test_cannot_settle_unmatched():
         assert False
     except SettlementError:
         pass
+
+
+def test_parimutuel_pool_pays_winners_prorata():
+    home, away = ScoreStat(100, 2, 0), ScoreStat(101, 1, 0)
+    tree = MerkleTree([home.leaf(), away.leaf(), ScoreStat(102, 0, 0).leaf()])
+    intent = MarketIntent(2001, 0, 100, TraderPredicate(2, Comparison.GREATER_THAN),
+                          stat_b_key=101, op=BinaryExpression.ADD)
+    pool = Pool(intent, tree.root)
+    pool.stake_yes("Alice", 100)      # YES: total goals > 2  (3 > 2 → YES wins)
+    pool.stake_yes("Carol", 50)
+    pool.stake_no("Bob", 120)
+    pool.stake_no("Dave", 30)
+    payouts = pool.settle(home, tree.proof(0), away, tree.proof(1))
+    # losing NO pool = 150, split pro-rata among YES stakers (100:50)
+    assert round(payouts["Alice"], 1) == 200.0   # 100 + 100/150*150
+    assert round(payouts["Carol"], 1) == 100.0   # 50 + 50/150*150
+    assert "Bob" not in payouts and "Dave" not in payouts
+    # conservation: total paid == total staked
+    assert round(sum(payouts.values()), 6) == pool.total()
+
+
+def test_pool_rejects_forged_stat():
+    home, away = ScoreStat(100, 2, 0), ScoreStat(101, 1, 0)
+    tree = MerkleTree([home.leaf(), away.leaf()])
+    intent = MarketIntent(2001, 0, 100, TraderPredicate(2, Comparison.GREATER_THAN),
+                          stat_b_key=101, op=BinaryExpression.ADD)
+    pool = Pool(intent, tree.root)
+    pool.stake_yes("Alice", 100)
+    pool.stake_no("Bob", 100)
+    forged = ScoreStat(100, 0, 0)
+    try:
+        pool.settle(forged, tree.proof(0), away, tree.proof(1))
+        assert False, "forged stat must not settle the pool"
+    except SettlementError:
+        assert not pool.settled
 
 
 def test_encoder_discriminator_matches_idl():
