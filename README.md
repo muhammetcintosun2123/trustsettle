@@ -45,8 +45,10 @@ anchors that fixture's scores root. This is public chain state — no API token 
 
 ## Run it
 ```
-pip install pycryptodome solders
+pip install pycryptodome solders httpx
 python -m settle.demo            # full trustless settlement, plus a rejected forgery
+python -m settle.onchain         # read the live on-chain order book (real trades)
+python -m settle.web --open      # self-contained visual dashboard (one HTML file)
 python -m pytest -q              # the trust primitive + settlement logic
 ```
 
