@@ -1,29 +1,86 @@
 """
-serve.py — TrustSettle LIVE: watch a real settlement happen on-chain.
+serve.py — TrustSettle LIVE: watch a real settlement on-chain.
 
-A stdlib HTTP server (no deps beyond the project's) that:
-  • loads the REAL prediction-market order book off the deployed program (live, free), and
-  • on demand, runs a REAL create → join → settle lifecycle on Solana devnet and streams
-    each transaction + confirmation to the browser as it lands — including the on-chain
-    Merkle verification that makes settlement trustless.
+Runs out of the box with ZERO setup:  `python3 serve.py`  →  http://localhost:8789
+(standard library only for the page + order book). It shows:
+  • the REAL prediction-market order book on the deployed program, and
+  • a create → join → settle lifecycle on Solana devnet with real explorer links.
 
-This is the screen you record: a market created, matched, and TRUSTLESSLY SETTLED live on
-devnet, with real explorer links appearing as each step confirms.
+When run with the full toolchain (httpx + solders + pycryptodome + a funded devnet key at
+~/.config/solana/id.json), pressing the button submits a FRESH on-chain lifecycle live.
+Without those, it streams the already-proven real transactions (captured in live_cache.json)
+so the screen still shows genuine on-chain settlement with working explorer links.
 
-  python serve.py                 # http://localhost:8789
+  python3 serve.py            # page + order book always work; settle uses live or proven tx
 """
 from __future__ import annotations
 
 import argparse
 import json
-import struct
+import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from solders.instruction import Instruction, AccountMeta
-from settle import onchain_market as OM
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_CACHE = os.path.join(_HERE, "live_cache.json")
+_cache = {"program": "HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa", "book": [], "proof": []}
 
-PROGRAM = OM.PROGRAM
+
+def load_cache():
+    global _cache
+    try:
+        with open(_CACHE) as f:
+            _cache = json.load(f)
+    except Exception:
+        pass
+
+
+def live_orderbook():
+    """Real order book off-chain read; falls back to cached real book if httpx absent."""
+    try:
+        from settle.onchain import fetch_order_book
+        book = [{"id": str(i.intent_id)[-8:], "maker": i.maker[:5] + "…" + i.maker[-4:],
+                 "fixture": i.fixture_id, "stake": round(i.deposit_amount / 1e6, 2),
+                 "state": i.state_name} for i in fetch_order_book()[:30]]
+        if book:
+            return book, "live"
+    except Exception:
+        pass
+    return _cache.get("book", []), "cached"
+
+
+def run_live_settlement(emit):
+    """Try a FRESH on-chain lifecycle; on any failure, stream the proven cached txs."""
+    try:
+        import struct
+        from solders.instruction import Instruction, AccountMeta
+        from settle import onchain_market as OM
+        kp = OM.load_key(); maker = kp.pubkey(); SYSTEM = OM.SYSTEM; PROGRAM = OM.PROGRAM
+        mid = int(time.time()); mpda = OM.market_pda(maker, mid)
+        home = OM.leaf(101, 2, 0); away = OM.leaf(102, 1, 0)
+        root, proof = OM.build_tree([home, away, OM.leaf(103, 0, 0), OM.leaf(104, 1, 0)])
+        emit("step", {"k": "market", "msg": f"Opening a market on a real fixture — 'home goals > 1'. Anchored root {root.hex()[:16]}…"})
+        d = bytes([0]) + struct.pack("<Q", mid) + struct.pack("<q", 18209181) + struct.pack("<I", 101) \
+            + struct.pack("<i", 1) + bytes([0]) + root + struct.pack("<Q", 10_000_000)
+        sig = OM.send([Instruction(PROGRAM, d, [AccountMeta(maker, True, True), AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "create")
+        emit("tx", {"k": "create", "label": "Market created · maker escrows 0.01 SOL", "sig": sig})
+        sig = OM.send([Instruction(PROGRAM, bytes([1]), [AccountMeta(maker, True, True), AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "join")
+        emit("tx", {"k": "join", "label": "Taker matched the stake · 0.02 SOL escrowed", "sig": sig})
+        emit("step", {"k": "verify", "msg": "Submitting the proven score + keccak Merkle proof — verified ON-CHAIN against the anchored root…"})
+        pd = bytes([2]) + struct.pack("<I", 101) + struct.pack("<i", 2) + struct.pack("<i", 0) + bytes([len(proof)])
+        for sib, r in proof:
+            pd += sib + bytes([1 if r else 0])
+        sig = OM.send([Instruction(PROGRAM, pd, [AccountMeta(mpda, False, True), AccountMeta(maker, False, True)])], kp, "settle")
+        emit("tx", {"k": "settle", "label": "✓ Proof verified on-chain · winner paid · market closed", "sig": sig})
+        emit("done", {"msg": "Trustlessly settled LIVE on devnet — only a Merkle-proven score can pay out."})
+        return
+    except Exception as e:
+        emit("step", {"k": "market", "msg": f"(live signing unavailable: {str(e)[:80]} — showing the proven on-chain settlement)"})
+    # fallback: stream the already-proven real transactions
+    for p in _cache.get("proof", []):
+        emit("tx", {"k": p["k"], "label": p["label"], "sig": p["sig"]})
+        time.sleep(0.6)
+    emit("done", {"msg": "These are real, finalized devnet transactions — trustless settlement, proven on-chain."})
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -33,66 +90,34 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, ctype, body):
         self.send_response(code); self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-cache"); self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
-        if self.path == "/" or self.path.startswith("/?"):
-            self._send(200, "text/html; charset=utf-8", PAGE.encode())
-        elif self.path == "/orderbook":
-            self.orderbook()
-        elif self.path.startswith("/settle"):
-            self.settle_stream()
-        else:
-            self._send(404, "text/plain", b"not found")
-
-    def orderbook(self):
         try:
-            from settle.onchain import fetch_order_book
-            book = [{"id": str(i.intent_id)[-8:], "maker": i.maker[:5] + "…" + i.maker[-4:],
-                     "fixture": i.fixture_id, "stake": round(i.deposit_amount / 1e6, 2),
-                     "state": i.state_name} for i in fetch_order_book()[:30]]
-        except Exception:
-            book = []
-        self._send(200, "application/json", json.dumps({"program": str(PROGRAM), "book": book}).encode())
-
-    def settle_stream(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache"); self.end_headers()
-
-        def emit(ev, p):
-            self.wfile.write(f"event: {ev}\ndata: {json.dumps(p)}\n\n".encode()); self.wfile.flush()
-
-        try:
-            kp = OM.load_key()
-            maker = kp.pubkey()
-            SYSTEM = OM.SYSTEM
-            mid = int(time.time())
-            mpda = OM.market_pda(maker, mid)
-            home = OM.leaf(101, 2, 0); away = OM.leaf(102, 1, 0)
-            root, proof = OM.build_tree([home, away, OM.leaf(103, 0, 0), OM.leaf(104, 1, 0)])
-            emit("step", {"k": "market", "msg": f"Opening a market on a real World Cup fixture — 'home goals > 1'. Anchored root {root.hex()[:16]}…"})
-
-            d = bytes([0]) + struct.pack("<Q", mid) + struct.pack("<q", 18209181) \
-                + struct.pack("<I", 101) + struct.pack("<i", 1) + bytes([0]) + root + struct.pack("<Q", 10_000_000)
-            sig = OM.send([Instruction(PROGRAM, d, [AccountMeta(maker, True, True),
-                          AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "create_market")
-            emit("tx", {"k": "create", "label": "Market created · maker escrows 0.01 SOL", "sig": sig})
-
-            sig = OM.send([Instruction(PROGRAM, bytes([1]), [AccountMeta(maker, True, True),
-                          AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "join_market")
-            emit("tx", {"k": "join", "label": "Taker matched the stake · 0.02 SOL escrowed", "sig": sig})
-
-            emit("step", {"k": "verify", "msg": "Submitting the proven score + keccak Merkle proof — the program verifies it folds to the anchored root ON-CHAIN…"})
-            pd = bytes([2]) + struct.pack("<I", 101) + struct.pack("<i", 2) + struct.pack("<i", 0) + bytes([len(proof)])
-            for sib, is_right in proof:
-                pd += sib + bytes([1 if is_right else 0])
-            sig = OM.send([Instruction(PROGRAM, pd, [AccountMeta(mpda, False, True),
-                          AccountMeta(maker, False, True)])], kp, "settle")
-            emit("tx", {"k": "settle", "label": "✓ Proof verified on-chain · predicate true · winner paid · market closed", "sig": sig})
-            emit("done", {"msg": "Trustlessly settled on Solana devnet. No oracle, no admin — only a Merkle-proven score can pay out."})
-        except Exception as e:
-            emit("error", {"msg": str(e)[:300]})
+            if self.path == "/" or self.path.startswith("/?"):
+                self._send(200, "text/html; charset=utf-8", PAGE.encode())
+            elif self.path == "/orderbook":
+                book, src = live_orderbook()
+                self._send(200, "application/json", json.dumps({"program": _cache["program"], "book": book, "src": src}).encode())
+            elif self.path.startswith("/settle"):
+                self.send_response(200); self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache"); self.end_headers()
+                def emit(ev, p):
+                    try:
+                        self.wfile.write(f"event: {ev}\ndata: {json.dumps(p)}\n\n".encode()); self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        raise
+                try:
+                    run_live_settlement(emit)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+            else:
+                self._send(404, "text/plain", b"not found")
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
 
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -112,6 +137,7 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 .panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--edge);border-radius:15px;padding:15px}
 .panel h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin:0 0 10px;font-weight:600}
 button.go{background:var(--mint);color:#052;border:0;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:800;cursor:pointer;width:100%}
+button.go:disabled{opacity:.6;cursor:default}
 .book{max-height:340px;overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}
 th{position:sticky;top:0;background:var(--panel);text-align:left;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:6px 7px;border-bottom:1px solid var(--edge)}
 td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);font-size:11px;color:var(--mut)}
@@ -135,7 +161,7 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <p class="hint" id="prg">reading deployed program…</p>
   </div>
   <div class="panel">
-    <h2>Settle a market — live on-chain</h2>
+    <h2>Settle a market — on-chain</h2>
     <button class="go" id="go">▶ Run create → join → settle on devnet</button>
     <div class="feed" id="feed" style="margin-top:12px"></div>
   </div>
@@ -144,17 +170,16 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
 <script>
 const $=id=>document.getElementById(id);
 fetch("/orderbook").then(r=>r.json()).then(d=>{
-  $("prg").textContent="program "+d.program.slice(0,8)+"… · "+d.book.length+" real orders · public chain state";
-  $("book").innerHTML=d.book.map(o=>`<tr><td>${o.id}</td><td>${o.maker}</td><td>${o.fixture}</td><td>${o.stake.toFixed(2)}</td><td><span class="pill">${o.state}</span></td>`).join("")||'<tr><td colspan=5>offline</td></tr>';
-});
+  $("prg").textContent="program "+d.program.slice(0,8)+"… · "+d.book.length+" real orders ("+d.src+") · public chain state";
+  $("book").innerHTML=d.book.map(o=>`<tr><td>${o.id}</td><td>${o.maker}</td><td>${o.fixture}</td><td>${o.stake.toFixed(2)}</td><td><span class="pill">${o.state}</span></td>`).join("")||'<tr><td colspan=5>—</td></tr>';
+}).catch(()=>{});
 $("go").onclick=()=>{
-  $("go").disabled=true;$("feed").innerHTML='<div class="ev"><span class="spin"></span>submitting real transactions to devnet…</div>';
+  $("go").disabled=true;$("feed").innerHTML='<div class="ev"><span class="spin"></span>settling on devnet…</div>';
   const es=new EventSource("/settle");let first=true;
   const add=(cls,html)=>{if(first){$("feed").innerHTML="";first=false;}const d=document.createElement("div");d.className="ev "+cls;d.innerHTML=html;$("feed").prepend(d);};
   es.addEventListener("step",e=>{const d=JSON.parse(e.data);add(d.k,`<div class="msg">${d.msg}</div>`);});
   es.addEventListener("tx",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">✅ ${d.label}</div><a href="https://explorer.solana.com/tx/${d.sig}?cluster=devnet" target="_blank">${d.sig.slice(0,28)}…</a>`);});
   es.addEventListener("done",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">🔒 ${d.msg}</div>`);$("go").disabled=false;es.close();});
-  es.addEventListener("error",e=>{try{const d=JSON.parse(e.data);add("err",`<div class="msg">error: ${d.msg}</div>`);}catch(_){}$("go").disabled=false;es.close();});
 };
 </script></body></html>"""
 
@@ -163,13 +188,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8789)
     a = ap.parse_args()
+    load_cache()
     srv = ThreadingHTTPServer(("0.0.0.0", a.port), Handler)
-    print(f"TrustSettle LIVE — program {PROGRAM}")
-    print(f"▶ open  http://localhost:{a.port}  (live order book + real on-chain settlement)")
+    print("=" * 56)
+    print(f" TrustSettle LIVE  ·  program {_cache['program'][:8]}…")
+    print(f" ▶  open  http://localhost:{a.port}   (order book + on-chain settle)")
+    print("=" * 56)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        pass
+        print("\nstopped.")
     return 0
 
 
