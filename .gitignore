@@ -7,3 +7,7 @@ test-ledger/
 out/dashboard.html
 out/artifact.html
 out/
+txline/devnet_token.json
+txline/devnet_key.json
+txline/mainnet_token.json
+txline/mainnet_key.json
