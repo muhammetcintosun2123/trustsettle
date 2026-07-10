@@ -286,7 +286,18 @@ $("go").onclick=()=>{
   const es=new EventSource("/settle");let first=true;
   const add=(cls,html)=>{if(first){$("feed").innerHTML="";first=false;}const d=document.createElement("div");d.className="ev "+cls;d.innerHTML=html;$("feed").prepend(d);};
   es.addEventListener("step",e=>{const d=JSON.parse(e.data);add(d.k,`<div class="msg">${d.msg}</div>`);});
-  es.addEventListener("tx",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">✅ ${d.label}</div><a href="https://explorer.solana.com/tx/${d.sig}?cluster=devnet" target="_blank">${d.sig.slice(0,28)}…</a>`);});
+  es.addEventListener("tx",e=>{
+    const d=JSON.parse(e.data);
+    add("tx",`<div class="msg">✅ ${d.label}</div><a href="https://explorer.solana.com/tx/${d.sig}?cluster=devnet" target="_blank">${d.sig.slice(0,28)}…</a>`);
+    
+    // Dynamically update TVL when user interacts with the contract!
+    if(d.label.includes("escrows") || d.label.includes("escrowed")) {
+        globalTvl += 0.02; // Simulate maker/taker locking funds
+        $("tvl").textContent = globalTvl.toFixed(2) + " SOL";
+        $("tvl").style.color = "var(--mint)";
+        setTimeout(()=> $("tvl").style.color = "white", 500);
+    }
+  });
   es.addEventListener("done",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">🔒 ${d.msg}</div>`);$("go").disabled=false;es.close();});
 };
 </script></body></html>"""
