@@ -84,6 +84,23 @@ def build_validate_stat(v, value_override=None):
     return data
 
 
+def leaf(key: int, value: int, period: int) -> bytes:
+    from settle.merkle import keccak256
+    return keccak256(
+        key.to_bytes(4, "little", signed=False)
+        + value.to_bytes(4, "little", signed=True)
+        + period.to_bytes(4, "little", signed=True)
+    )
+
+
+def build_tree(leaves: list[bytes]) -> tuple[bytes, list[tuple[bytes, bool]]]:
+    from settle.merkle import MerkleTree
+    tree = MerkleTree(leaves)
+    proof_nodes = tree.proof(0)
+    proof_tuples = [(node.hash, node.is_right_sibling) for node in proof_nodes]
+    return tree.root, proof_tuples
+
+
 def daily_pda(min_ts):
     epoch_day = min_ts // 86400000
     return Pubkey.find_program_address(

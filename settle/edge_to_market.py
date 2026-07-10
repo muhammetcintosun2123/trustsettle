@@ -87,14 +87,37 @@ def main() -> int:
           f'the final whistle hits the chain. No bookie, no argument."')
 
     if a.settle:
-        print(f"\n④ Trustless settlement (full lifecycle)…")
+        print(f"\n④ Trustless settlement (full lifecycle using finalized fixture 17952170 score proof)…")
+        v = OM.F.get("/api/scores/stat-validation?fixtureId=17952170&seq=941&statKey=1002")
+        st = v["statToProve"]
+        value = st["value"]
+        root = bytes(v["summary"]["eventStatsSubTreeRoot"])
+        min_ts = v["summary"]["updateStats"]["minTimestamp"]
+        daily_roots_pda = OM.daily_pda(min_ts)
+
+        mid_real = int(time.time()) + 100
+        mpda_real = OM.market_pda(maker, mid_real)
+        comparison = 0 # GreaterThan
+        threshold = 0
+        d_real = bytes([0]) + struct.pack("<Q", mid_real) + struct.pack("<q", 17952170) \
+            + struct.pack("<I", 1002) + struct.pack("<i", threshold) + bytes([comparison]) + root + struct.pack("<Q", a.stake)
+        
+        OM.send([Instruction(PROGRAM, d_real, [AccountMeta(maker, True, True),
+                AccountMeta(mpda_real, False, True), AccountMeta(SYSTEM, False, False)])], kp, "create_real_market")
+        
         OM.send([Instruction(PROGRAM, bytes([1]), [AccountMeta(maker, True, True),
-                AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "join_market")
-        pd = bytes([2]) + struct.pack("<I", stat_key) + struct.pack("<i", 2) + struct.pack("<i", 0) + bytes([len(proof)])
-        for sib, r in proof:
-            pd += sib + bytes([1 if r else 0])
-        OM.send([Instruction(PROGRAM, pd, [AccountMeta(mpda, False, True), AccountMeta(maker, False, True)])], kp, "settle")
-        print("   ✓ Merkle proof verified on-chain → winner paid, market closed.")
+                AccountMeta(mpda_real, False, True), AccountMeta(SYSTEM, False, False)])], kp, "join_real_market")
+        
+        validate_stat_data = OM.build_validate_stat(v)
+        pd = bytes([2]) + struct.pack("<i", value) + validate_stat_data
+        ix = Instruction(PROGRAM, pd, [
+            AccountMeta(mpda_real, False, True),
+            AccountMeta(maker, False, True),
+            AccountMeta(OM.TXORACLE, False, False),
+            AccountMeta(daily_roots_pda, False, False),
+        ])
+        OM.send([ix], kp, "settle")
+        print("   ✓ Merkle proof verified on-chain via CPI to validate_stat → winner paid, market closed.")
 
     print(f"\n{'='*66}\n One feed → a real signal → a real on-chain market → a fan broadcast.\n{'='*66}")
     return 0
