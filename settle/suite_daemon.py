@@ -160,7 +160,11 @@ def main() -> int:
     print("=" * 60)
     try:
         while True:
-            cycle(a.onchain, state)
+            try:
+                cycle(a.onchain, state)
+            except Exception as e:
+                print(f"⚠️ [Daemon Network/Cycle Error] Handled gracefully: {e}. Retrying in {a.poll}s...")
+            
             if a.once:
                 break
             time.sleep(a.poll)
