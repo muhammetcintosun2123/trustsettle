@@ -2,6 +2,9 @@
 
 <p align="center">
   <img src="docs/dashboard.png" alt="TrustSettle Live Dashboard" width="820">
+  <br><em>Live settlement + forge rejection — real score verified ✅, forged score rejected 🛡️</em>
+  <br><br>
+  <img src="docs/forge_rejection.png" alt="Forge Rejection Security Proof" width="820">
 </p>
 
 > A prediction market engine where two traders escrow SOL on a stat predicate for a World Cup fixture, and the outcome is settled **trustlessly on Solana** — no oracle admin, no off-chain callback. Resolution is proven by a Cross-Program Invocation (CPI) into TxODDS's own `validate_stat`, verifying the score's Merkle proof against anchored daily roots. A forged score **cannot settle**.
