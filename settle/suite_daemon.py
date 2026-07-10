@@ -106,38 +106,50 @@ def cycle(onchain: bool, state: dict) -> int:
                 tg_chat = os.getenv("PITCHSIDE_CHAT_ID")
                 if tg_token and tg_chat:
                     try:
-                        import httpx
-                        from pathlib import Path
                         import sys
-                        # Add pitchside to path to use its tts
                         pitchside_path = str(Path(__file__).resolve().parent.parent.parent / "pitchside")
                         if pitchside_path not in sys.path: sys.path.append(pitchside_path)
                         from pitchside import tts
                         
-                        # Send text with Gamification Buttons
-                        msg = f"🚨 *TxLINE Market Alert* 🚨\n⚽ {r['home']} v {r['away']}\n\n📣 The Gaffer: \"{gaffer}\""
-                        
-                        keyboard = {
-                            "inline_keyboard": [
-                                [
-                                    {"text": f"🔥 Tail ({r['into_name']})", "callback_data": f"pred_{r['id']}_{r['into_name']}"},
-                                    {"text": "🛑 Fade (Bet Against)", "callback_data": f"pred_{r['id']}_fade"}
-                                ]
-                            ]
-                        }
-                        
-                        url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
-                        httpx.post(url, json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown", "reply_markup": keyboard})
-                        
-                        # Send Voice Note (if TTS is available)
-                        audio_path = tts.say(gaffer, f"signal_{r['id']}")
-                        if audio_path:
-                            with open(audio_path, "rb") as f:
-                                httpx.post(f"https://api.telegram.org/bot{tg_token}/sendVoice",
-                                           data={"chat_id": tg_chat}, files={"voice": f})
-                        print(f"  🎙️ Pushed Voice Note to Telegram for {r['home']} v {r['away']}!")
+                        def _background_push(record, text):
+                            import httpx
+                            try:
+                                # Send text with Gamification Buttons
+                                msg = f"🚨 *TxLINE Market Alert* 🚨\n⚽ {record['home']} v {record['away']}\n\n📣 The Gaffer: \"{text}\""
+                                keyboard = {
+                                    "inline_keyboard": [
+                                        [
+                                            {"text": f"🔥 Tail ({record['into_name']})", "callback_data": f"pred_{record['id']}_{record['into_name']}"},
+                                            {"text": "🛑 Fade (Bet Against)", "callback_data": f"pred_{record['id']}_fade"}
+                                        ]
+                                    ]
+                                }
+                                url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+                                httpx.post(url, json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown", "reply_markup": keyboard}, timeout=15)
+                                
+                                # Send Voice Note (if TTS is available)
+                                audio_path = tts.say(text, f"signal_{record['id']}")
+                                if audio_path:
+                                    with open(audio_path, "rb") as f:
+                                        httpx.post(f"https://api.telegram.org/bot{tg_token}/sendVoice",
+                                                   data={"chat_id": tg_chat}, files={"voice": f}, timeout=30)
+                                    print(f"  🎙️ Pushed Voice Note to Telegram for {record['home']} v {record['away']}!")
+                                    
+                                    # --- GARBAGE COLLECTION ---
+                                    import os
+                                    try:
+                                        os.remove(audio_path)
+                                    except Exception:
+                                        pass
+                            except Exception as e:
+                                print(f"  ⚠️ Telegram Push failed in background: {e}")
+                                
+                        # FIRE AND FORGET: Do not block the main HFT polling loop!
+                        import threading
+                        threading.Thread(target=_background_push, args=(r, gaffer), daemon=True).start()
+
                     except Exception as e:
-                        print(f"  ⚠️ Telegram Push failed: {e}")
+                        print(f"  ⚠️ Thread spawn failed: {e}")
                         
                 state["acted"][key] = now
                 acted_now += 1

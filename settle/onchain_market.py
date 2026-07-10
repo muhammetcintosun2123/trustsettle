@@ -112,7 +112,16 @@ def _rpc(m, p):
 
 
 def load_key():
-    return Keypair.from_bytes(bytes(json.loads(_KEY.read_text())))
+    try:
+        return Keypair.from_bytes(bytes(json.loads(_KEY.read_text())))
+    except FileNotFoundError:
+        print(f"\n❌ [CRITICAL] Solana wallet not found at {_KEY}")
+        print("   Please run `solana-keygen new` to generate a keypair,")
+        print("   and fund it with `solana airdrop 2` on devnet.")
+        raise SystemExit(1)
+    except json.JSONDecodeError:
+        print(f"\n❌ [CRITICAL] Solana wallet at {_KEY} is corrupted or invalid JSON.")
+        raise SystemExit(1)
 
 
 def market_pda(maker, market_id):
