@@ -114,10 +114,20 @@ def cycle(onchain: bool, state: dict) -> int:
                         if pitchside_path not in sys.path: sys.path.append(pitchside_path)
                         from pitchside import tts
                         
-                        # Send text
+                        # Send text with Gamification Buttons
                         msg = f"🚨 *TxLINE Market Alert* 🚨\n⚽ {r['home']} v {r['away']}\n\n📣 The Gaffer: \"{gaffer}\""
+                        
+                        keyboard = {
+                            "inline_keyboard": [
+                                [
+                                    {"text": f"🔥 Tail ({r['into_name']})", "callback_data": f"pred_{r['id']}_{r['into_name']}"},
+                                    {"text": "🛑 Fade (Bet Against)", "callback_data": f"pred_{r['id']}_fade"}
+                                ]
+                            ]
+                        }
+                        
                         url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
-                        httpx.post(url, json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown"})
+                        httpx.post(url, json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown", "reply_markup": keyboard})
                         
                         # Send Voice Note (if TTS is available)
                         audio_path = tts.say(gaffer, f"signal_{r['id']}")
