@@ -59,7 +59,7 @@ def run_live_settlement(emit):
         from settle import onchain_market as OM
         OM.L.set_network("devnet")
         kp = OM.load_key(); maker = kp.pubkey(); SYSTEM = OM.SYSTEM; PROGRAM = OM.PROGRAM
-        mid = int(time.time()); mpda = OM.market_pda(maker, mid)
+        mid = int(time.time() * 1000); mpda = OM.market_pda(maker, mid)
 
         # Get real proof from TxODDS API
         v = OM.F.get("/api/scores/stat-validation?fixtureId=17952170&seq=941&statKey=1002")

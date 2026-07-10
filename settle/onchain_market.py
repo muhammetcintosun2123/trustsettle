@@ -174,7 +174,7 @@ def main() -> int:
     L.set_network("devnet")
     kp = load_key()
     maker = kp.pubkey()
-    market_id = int(time.time())
+    market_id = int(time.time() * 1000)
     mpda = market_pda(maker, market_id)
 
     print("=" * 66)
