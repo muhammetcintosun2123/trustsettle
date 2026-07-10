@@ -37,7 +37,7 @@ python -m settle.edge_to_market --settle      # (in the trustsettle repo)
 - **It runs itself**: `settle.suite_daemon` monitors every fixture continuously and acts on
   signals autonomously (the "autonomous operation" the Trading track asks for).
 - **It's real, on-chain, proven**: TrustSettle is a deployed program
-  (`HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa`) with real create→join→settle transactions
+  (`6XB4bLRXcsXSRJgdbwgCwkNia9p24ohBj6zvqwrPu92i`) with real create→join→settle transactions
   and an on-chain forgery rejection (see `trustsettle/DEPLOYED.md`).
 
 ## Repos

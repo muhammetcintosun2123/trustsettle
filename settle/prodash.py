@@ -70,9 +70,9 @@ def _regen_snapshot() -> None:
 
 # The settlement program is LIVE on Solana devnet — proven with real transactions.
 DEPLOYED = dict(
-    program="HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa",
-    settle_tx="3LcPKm8n8cH3k7qvUYGiv5VSa6fQKYSxoPDDQ7s3eNsnjyxcigx7tNvKyriKmAzct3ncH6fQPjU1b13gvjfNKHT6",
-    explorer="https://explorer.solana.com/address/HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa?cluster=devnet",
+    program="6XB4bLRXcsXSRJgdbwgCwkNia9p24ohBj6zvqwrPu92i",
+    settle_tx="zbWT1me8SYv6s7TUP78zj4nLmaUihWjQjhsPSiy36X2r44DnQv7Zxd4VDiwRs4V8SQ8otHMtvEf4CnUuhzKhcYR",
+    explorer="https://explorer.solana.com/address/6XB4bLRXcsXSRJgdbwgCwkNia9p24ohBj6zvqwrPu92i?cluster=devnet",
 )
 
 

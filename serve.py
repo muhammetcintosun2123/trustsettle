@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CACHE = os.path.join(_HERE, "live_cache.json")
-_cache = {"program": "HnabsZHsvayEBDdPdx8SmBg4oPrTRHmyV7hqyN2pNBa", "book": [], "proof": []}
+_cache = {"program": "6XB4bLRXcsXSRJgdbwgCwkNia9p24ohBj6zvqwrPu92i", "book": [], "proof": []}
 
 
 def load_cache():
@@ -54,24 +54,39 @@ def run_live_settlement(emit):
     try:
         import struct
         from solders.instruction import Instruction, AccountMeta
+        from solders.pubkey import Pubkey
         from settle import onchain_market as OM
         kp = OM.load_key(); maker = kp.pubkey(); SYSTEM = OM.SYSTEM; PROGRAM = OM.PROGRAM
         mid = int(time.time()); mpda = OM.market_pda(maker, mid)
-        home = OM.leaf(101, 2, 0); away = OM.leaf(102, 1, 0)
-        root, proof = OM.build_tree([home, away, OM.leaf(103, 0, 0), OM.leaf(104, 1, 0)])
-        emit("step", {"k": "market", "msg": f"Opening a market on a real fixture — 'home goals > 1'. Anchored root {root.hex()[:16]}…"})
-        d = bytes([0]) + struct.pack("<Q", mid) + struct.pack("<q", 18209181) + struct.pack("<I", 101) \
-            + struct.pack("<i", 1) + bytes([0]) + root + struct.pack("<Q", 10_000_000)
+
+        # Get real proof from TxODDS API
+        v = OM.F.get("/api/scores/stat-validation?fixtureId=17952170&seq=941&statKey=1002")
+        st = v["statToProve"]
+        value = st["value"] # 1
+        root = bytes(v["summary"]["eventStatsSubTreeRoot"])
+        min_ts = v["summary"]["updateStats"]["minTimestamp"]
+        daily_roots_pda = OM.daily_pda(min_ts)
+
+        emit("step", {"k": "market", "msg": f"Opening a market on real fixture 17952170 — 'home goals > 0'. Event root {root.hex()[:16]}…"})
+        d = bytes([0]) + struct.pack("<Q", mid) + struct.pack("<q", 17952170) + struct.pack("<I", 1002) \
+            + struct.pack("<i", 0) + bytes([0]) + root + struct.pack("<Q", 10_000_000)
         sig = OM.send([Instruction(PROGRAM, d, [AccountMeta(maker, True, True), AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "create")
         emit("tx", {"k": "create", "label": "Market created · maker escrows 0.01 SOL", "sig": sig})
         sig = OM.send([Instruction(PROGRAM, bytes([1]), [AccountMeta(maker, True, True), AccountMeta(mpda, False, True), AccountMeta(SYSTEM, False, False)])], kp, "join")
         emit("tx", {"k": "join", "label": "Taker matched the stake · 0.02 SOL escrowed", "sig": sig})
-        emit("step", {"k": "verify", "msg": "Submitting the proven score + keccak Merkle proof — verified ON-CHAIN against the anchored root…"})
-        pd = bytes([2]) + struct.pack("<I", 101) + struct.pack("<i", 2) + struct.pack("<i", 0) + bytes([len(proof)])
-        for sib, r in proof:
-            pd += sib + bytes([1 if r else 0])
-        sig = OM.send([Instruction(PROGRAM, pd, [AccountMeta(mpda, False, True), AccountMeta(maker, False, True)])], kp, "settle")
-        emit("tx", {"k": "settle", "label": "✓ Proof verified on-chain · winner paid · market closed", "sig": sig})
+        
+        emit("step", {"k": "verify", "msg": "Retrieving proof from TxODDS API and submitting validation to Solana... verified ON-CHAIN via CPI to validate_stat..."})
+        validate_stat_data = OM.build_validate_stat(v)
+        pd = bytes([2]) + struct.pack("<i", value) + validate_stat_data
+        
+        ix = Instruction(PROGRAM, pd, [
+            AccountMeta(mpda, False, True),
+            AccountMeta(maker, False, True),
+            AccountMeta(OM.TXORACLE, False, False),
+            AccountMeta(daily_roots_pda, False, False),
+        ])
+        sig = OM.send([ix], kp, "settle")
+        emit("tx", {"k": "settle", "label": "✓ Proof verified on-chain via TxODDS CPI · winner paid · market closed", "sig": sig})
         emit("done", {"msg": "Trustlessly settled LIVE on devnet — only a Merkle-proven score can pay out."})
         return
     except Exception as e:
