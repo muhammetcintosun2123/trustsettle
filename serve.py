@@ -51,11 +51,13 @@ def live_orderbook():
 
 def run_live_settlement(emit):
     """Try a FRESH on-chain lifecycle; on any failure, stream the proven cached txs."""
+    emit("step", {"k": "market", "msg": "Connection established. Loading Solana devnet credentials..."})
     try:
         import struct
         from solders.instruction import Instruction, AccountMeta
         from solders.pubkey import Pubkey
         from settle import onchain_market as OM
+        OM.L.set_network("devnet")
         kp = OM.load_key(); maker = kp.pubkey(); SYSTEM = OM.SYSTEM; PROGRAM = OM.PROGRAM
         mid = int(time.time()); mpda = OM.market_pda(maker, mid)
 
@@ -89,7 +91,7 @@ def run_live_settlement(emit):
         emit("tx", {"k": "settle", "label": "✓ Proof verified on-chain via TxODDS CPI · winner paid · market closed", "sig": sig})
         emit("done", {"msg": "Trustlessly settled LIVE on devnet — only a Merkle-proven score can pay out."})
         return
-    except Exception as e:
+    except BaseException as e:
         emit("step", {"k": "market", "msg": f"(live signing unavailable: {str(e)[:80]} — showing the proven on-chain settlement)"})
     # fallback: stream the already-proven real transactions
     for p in _cache.get("proof", []):
@@ -120,6 +122,7 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path.startswith("/settle"):
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache"); self.end_headers()
+                self.wfile.flush()
                 def emit(ev, p):
                     try:
                         self.wfile.write(f"event: {ev}\ndata: {json.dumps(p)}\n\n".encode()); self.wfile.flush()
