@@ -26,6 +26,12 @@ python3 serve.py          # → http://localhost:8789
 
 # Run the CLI end-to-end on-chain lifecycle + Forge Rejection
 ~/leadgen/.venv/bin/python3 -m settle.onchain_market --forge
+
+# Boot the Autonomous High-Frequency AMM (Liquidity Provider)
+~/leadgen/.venv/bin/python3 -m settle.amm
+
+# Boot the Autonomous Keeper Bot (Decentralized Liquidator)
+~/leadgen/.venv/bin/python3 -m settle.keeper
 ```
 *(Requires: `pip install pycryptodome solders httpx`)*
 
