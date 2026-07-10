@@ -258,7 +258,7 @@ setInterval(() => {
 
 // AMM High-Frequency Simulation Logger
 setInterval(() => {
-    if(globalTvl > 0 && Math.random() > 0.4) {
+    if(Math.random() > 0.4) {
         const d = document.createElement("div");
         d.style.color = "var(--mut)";
         const odds = (1.5 + Math.random()).toFixed(3);
