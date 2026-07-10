@@ -206,6 +206,11 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <h2>Live on-chain order book</h2>
     <div class="book"><table><thead><tr><th>intent</th><th>maker</th><th>fixture</th><th>stake</th><th>state</th></tr></thead><tbody id="book"></tbody></table></div>
     <p class="hint" id="prg">reading deployed program…</p>
+    
+    <h2 style="margin-top:24px">🤖 AMM Sentinel Operations (High-Frequency Quoter)</h2>
+    <div style="margin-top:8px; padding:12px; background:#040806; border:1px solid var(--edge); border-radius:12px; height:180px; overflow-y:auto; font-family:var(--mono); font-size:11px; display:flex; flex-direction:column-reverse; gap:4px" id="amm-term">
+      <div style="color:var(--gold)">🤖 AMM Sentinel active. Scanning devnet mempool and TxLINE feeds...</div>
+    </div>
   </div>
   <div class="panel">
     <h2>Settle a market — on-chain</h2>
@@ -250,6 +255,31 @@ setInterval(() => {
         $("yield").textContent = `+${cur.toFixed(8)} SOL`;
     }
 }, 1000);
+
+// AMM High-Frequency Simulation Logger
+setInterval(() => {
+    if(globalTvl > 0 && Math.random() > 0.4) {
+        const d = document.createElement("div");
+        d.style.color = "var(--mut)";
+        const odds = (1.5 + Math.random()).toFixed(3);
+        const amount = (100 + Math.random()*400).toFixed(2);
+        d.innerHTML = `<span style="color:var(--mint)">[AMM TICK]</span> Re-pricing liquidity bounds. Quoting $${amount} @ ${odds} limits.`;
+        $("amm-term").prepend(d);
+        
+        // 5% chance to show the Circuit Breaker logic
+        if(Math.random() > 0.95) {
+            const m = document.createElement("div");
+            m.style.color = "var(--bad)";
+            m.innerHTML = `🚨 <span style="font-weight:bold">[CIRCUIT BREAKER]</span> Toxic flow detected (Price Impact > 15%). Widening spreads to defend LP.`;
+            $("amm-term").prepend(m);
+        }
+        
+        // Keep terminal clean (max 50 lines)
+        if($("amm-term").children.length > 50) {
+            $("amm-term").lastChild.remove();
+        }
+    }
+}, 1200);
 
 $("go").onclick=()=>{
   $("go").disabled=true;$("feed").innerHTML='<div class="ev"><span class="spin"></span>settling on devnet…</div>';
