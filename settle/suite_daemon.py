@@ -99,6 +99,36 @@ def cycle(onchain: bool, state: dict) -> int:
                         print(f"  ⛓️  opened on-chain market for {r['home']} v {r['away']} → {sig[:16]}…")
                     except Exception as e:
                         rec["market_err"] = str(e)[:120]
+                        
+                # --- TELEGRAM VOICE PUSH ---
+                import os
+                tg_token = os.getenv("PITCHSIDE_BOT_TOKEN")
+                tg_chat = os.getenv("PITCHSIDE_CHAT_ID")
+                if tg_token and tg_chat:
+                    try:
+                        import httpx
+                        from pathlib import Path
+                        import sys
+                        # Add pitchside to path to use its tts
+                        pitchside_path = str(Path(__file__).resolve().parent.parent.parent / "pitchside")
+                        if pitchside_path not in sys.path: sys.path.append(pitchside_path)
+                        from pitchside import tts
+                        
+                        # Send text
+                        msg = f"🚨 *TxLINE Market Alert* 🚨\n⚽ {r['home']} v {r['away']}\n\n📣 The Gaffer: \"{gaffer}\""
+                        url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+                        httpx.post(url, json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown"})
+                        
+                        # Send Voice Note (if TTS is available)
+                        audio_path = tts.say(gaffer, f"signal_{r['id']}")
+                        if audio_path:
+                            with open(audio_path, "rb") as f:
+                                httpx.post(f"https://api.telegram.org/bot{tg_token}/sendVoice",
+                                           data={"chat_id": tg_chat}, files={"voice": f})
+                        print(f"  🎙️ Pushed Voice Note to Telegram for {r['home']} v {r['away']}!")
+                    except Exception as e:
+                        print(f"  ⚠️ Telegram Push failed: {e}")
+                        
                 state["acted"][key] = now
                 acted_now += 1
                 print(f"  📣 {r['home']} v {r['away']}: {gaffer}")
