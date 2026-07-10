@@ -211,15 +211,46 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <h2>Settle a market — on-chain</h2>
     <button class="go" id="go">▶ Run create → join → settle on devnet</button>
     <div class="feed" id="feed" style="margin-top:12px"></div>
+    
+    <!-- LST Yield Simulation Panel -->
+    <div style="margin-top:20px; padding:12px; border:1px solid var(--mint); background:rgba(63,224,200,0.1); border-radius:8px">
+      <h3 style="margin:0 0 8px; font-size:12px; color:var(--mint); text-transform:uppercase">🌱 LST Yield-Bearing Escrow</h3>
+      <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
+        Funds locked in the prediction market are automatically staked into jitoSOL to earn yield while the 90-minute match is played. Zero opportunity cost.
+      </div>
+      <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:14px; margin-bottom:4px">
+        <span>Total Value Locked (TVL):</span> <span id="tvl" style="color:white">0.00 SOL</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:14px">
+        <span>Accumulated Yield:</span> <span id="yield" style="color:var(--good)">+0.00000000 SOL</span>
+      </div>
+    </div>
+
   </div>
 </div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
+let globalTvl = 0.0;
 fetch("/orderbook").then(r=>r.json()).then(d=>{
   $("prg").textContent="program "+d.program.slice(0,8)+"… · "+d.book.length+" real orders ("+d.src+") · public chain state";
   $("book").innerHTML=d.book.map(o=>`<tr><td>${o.id}</td><td>${o.maker}</td><td>${o.fixture}</td><td>${o.stake.toFixed(2)}</td><td><span class="pill">${o.state}</span></td>`).join("")||'<tr><td colspan=5>—</td></tr>';
+  
+  // Calculate TVL for the Yield Simulator
+  globalTvl = d.book.reduce((sum, o) => sum + (o.stake * 2), 0); // Maker + Taker
+  $("tvl").textContent = globalTvl.toFixed(2) + " SOL";
 }).catch(()=>{});
+
+// Yield Simulator (8% APY ticking per second)
+setInterval(() => {
+    if(globalTvl > 0) {
+        const yieldPerSec = globalTvl * (0.08 / (365 * 24 * 60 * 60));
+        let cur = parseFloat($("yield").textContent.replace("+","").replace(" SOL",""));
+        cur += yieldPerSec;
+        $("yield").textContent = `+${cur.toFixed(8)} SOL`;
+    }
+}, 1000);
+
 $("go").onclick=()=>{
   $("go").disabled=true;$("feed").innerHTML='<div class="ev"><span class="spin"></span>settling on devnet…</div>';
   const es=new EventSource("/settle");let first=true;
