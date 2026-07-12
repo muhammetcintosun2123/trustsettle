@@ -38,10 +38,10 @@
 python3 serve.py                                          # → http://localhost:8789
 
 # Full on-chain lifecycle (CLI)
-~/leadgen/.venv/bin/python3 -m settle.onchain_market --forge   # create → join → settle → forge rejected
+python3 -m settle.onchain_market --forge   # create → join → settle → forge rejected
 
 # Suite loop: SharpEdge signal → on-chain market → fan broadcast
-~/leadgen/.venv/bin/python3 -m settle.edge_to_market --settle  # full 3-product pipeline
+python3 -m settle.edge_to_market --settle  # full 3-product pipeline
 ```
 
 ---
@@ -129,7 +129,7 @@ trustsettle/
 ## 🧪 Tests
 
 ```bash
-~/leadgen/.venv/bin/python3 -m pytest -q    # 14 passed
+pytest -q    # 14 passed
 ```
 
 | Test | What It Proves |

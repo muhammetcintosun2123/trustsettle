@@ -34,6 +34,6 @@ This is the strongest settlement guarantee the track asks for: resolution confir
 ## Reproduce
 ```bash
 solana program show 6XB4bLRXcsXSRJgdbwgCwkNia9p24ohBj6zvqwrPu92i --url devnet
-~/leadgen/.venv/bin/python3 -m settle.onchain_market --forge        # runs the full lifecycle + forgery rejection
+python3 -m settle.onchain_market --forge        # runs the full lifecycle + forgery rejection
 ```
 (The deployer keypair with some devnet SOL is at `~/.config/solana/id.json`.)
