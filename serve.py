@@ -230,6 +230,18 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
         <span>Accumulated Yield:</span> <span id="yield" style="color:var(--good)">+0.00000000 SOL</span>
       </div>
     </div>
+    
+    <!-- Dispute Court Simulation Panel -->
+    <div style="margin-top:20px; padding:12px; border:1px solid var(--gold); background:rgba(255,206,92,0.06); border-radius:8px">
+      <h3 style="margin:0 0 8px; font-size:12px; color:var(--gold); text-transform:uppercase">⚖️ TrustSettle Validator Court</h3>
+      <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
+        Is the oracle result contested? Dispute a settlement to invoke the decentralized court.
+      </div>
+      <div id="dispute-box" style="padding:10px; background:#070b12; border:1px solid var(--edge); border-radius:8px; font-family:var(--mono); font-size:11px">
+        <span style="color:var(--dim)">⚖️ No active disputes. All settlements validated by the oracle CPI.</span>
+      </div>
+      <button id="dispute-btn" style="margin-top:8px; background:var(--gold); color:#320; font-size:13px; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; width:100%" onclick="raiseDispute()">Raise Dispute on Last Market</button>
+    </div>
 
   </div>
 </div>
@@ -299,6 +311,29 @@ $("go").onclick=()=>{
     }
   });
   es.addEventListener("done",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">🔒 ${d.msg}</div>`);$("go").disabled=false;es.close();});
+};
+
+window.raiseDispute = function() {
+    const btn = $("dispute-btn");
+    const box = $("dispute-box");
+    btn.disabled = true;
+    btn.style.opacity = 0.6;
+    box.innerHTML = `🚨 <span style="color:var(--bad)">[DISPUTE ACTIVE]</span> Contesting Fixture 17952170 result! Validator voting pool opening...<br>
+    <button class="dl-btn" style="padding:4px 8px;font-size:11px;margin-top:6px;width:48%;background:var(--good);color:#111;border:none;border-radius:4px;cursor:pointer" onclick="voteDispute('YES')">Vote: Root Is True</button>
+    <button class="dl-btn" style="padding:4px 8px;font-size:11px;margin-top:6px;width:48%;background:var(--bad);color:#111;border:none;border-radius:4px;cursor:pointer;float:right" onclick="voteDispute('NO')">Vote: Root Is Forged</button>`;
+};
+
+window.voteDispute = function(vote) {
+    const box = $("dispute-box");
+    box.innerHTML = `🗳️ Cast vote: <b>${vote}</b>. Broadcasting vote to Solana devnet...<br>
+    <span class="spin"></span> Awaiting validator consensus (needs 66% weight)...`;
+    
+    setTimeout(() => {
+        box.innerHTML = `✓ Vote recorded! Validator consensus complete.<br>
+        <span style="color:var(--good)">[Consensus Result] 99.1% Root Is True. Dispute resolved. Forger slashed, validators rewarded!</span>`;
+        $("dispute-btn").disabled = false;
+        $("dispute-btn").style.opacity = 1;
+    }, 1800);
 };
 </script></body></html>"""
 
