@@ -156,6 +156,50 @@ def test_dashboard_builds_self_contained():
     assert "http://" not in html and "https://" not in html   # no external deps
 
 
+def _synthetic_validation_payload():
+    z = bytes(32)
+    node = [{"hash": z, "isRightSibling": True}]
+    return {
+        "statToProve": {"key": 1002, "value": 1, "period": 4},
+        "summary": {"fixtureId": 17952170,
+                    "updateStats": {"updateCount": 5, "minTimestamp": 1000, "maxTimestamp": 2000},
+                    "eventStatsSubTreeRoot": z},
+        "subTreeProof": node, "mainTreeProof": node, "eventStatRoot": z, "statProof": node,
+    }
+
+
+def test_validate_stat_forged_value_changes_the_leaf():
+    # The on-chain instruction the Merkle Verifier submits must differ for a forged
+    # value — that's exactly why a false score can't fold to the anchored root. Hermetic.
+    from settle.real_validate import build_validate_stat, DISC
+    v = _synthetic_validation_payload()
+    real = build_validate_stat(v)
+    forged = build_validate_stat(v, value_override=-999)
+    assert real[:8] == DISC and forged[:8] == DISC     # real on-chain discriminator
+    assert real != forged                              # forged value → different leaf bytes
+
+
+def test_verify_endpoint_offline_fallback_is_honest():
+    # /verify must degrade honestly (ok=False), never fabricate a verdict, when the
+    # live devnet/feed call fails. Hermetic: force verify_live to raise.
+    # (real_validate prepends sharpedge to sys.path, so pin THIS repo's serve.py.)
+    sys.modules.pop("serve", None)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import serve
+    import settle.real_validate as rv
+    orig = rv.verify_live
+    try:
+        def _boom(*a, **k):
+            raise RuntimeError("offline-test")
+        rv.verify_live = _boom
+        serve._verify_cache["result"] = None
+        d = serve.cached_verify()
+        assert d["ok"] is False and "offline-test" in d["error"]
+    finally:
+        rv.verify_live = orig
+        serve._verify_cache["result"] = None
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

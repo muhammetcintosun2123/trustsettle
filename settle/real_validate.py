@@ -114,6 +114,31 @@ def simulate(v, value_override=None):
     return err, ret, logs
 
 
+def verify_live(fixture: int = 17952170, seq: int = 941, stat: int = 1002,
+                forged_value: int = -999) -> dict:
+    """Run the REAL on-chain check for the dashboard: validate the true score and a
+    forged value against TxODDS's anchored root via `validate_stat`. Returns a
+    structured, JSON-serializable verdict (no fakes — it's a live devnet simulation)."""
+    L.set_network("devnet")
+    v = F.get(f"/api/scores/stat-validation?fixtureId={fixture}&seq={seq}&statKey={stat}")
+    st = v["statToProve"]
+    pda = daily_pda(v["summary"]["updateStats"]["minTimestamp"])
+
+    err, _, logs = simulate(v)
+    real_logs = [l.replace("Program log:", "").strip() for l in logs if "Program log" in l]
+    err2, _, _ = simulate(v, value_override=forged_value)
+
+    return {
+        "ok": True,
+        "fixture": fixture,
+        "pda": str(pda),
+        "program": str(PROGRAM),
+        "stat": {"key": st["key"], "value": st["value"], "period": st["period"]},
+        "real": {"valid": err is None, "logs": real_logs},
+        "forged": {"value": forged_value, "rejected": err2 is not None},
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixture", type=int, default=17952170)

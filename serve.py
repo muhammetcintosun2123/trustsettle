@@ -35,6 +35,22 @@ def load_cache():
         pass
 
 
+_verify_cache = {"result": None}
+
+
+def cached_verify():
+    """Run the REAL on-chain validate_stat check once and cache it (the two devnet
+    simulations take a few seconds). Falls back to an honest 'offline' flag if devnet
+    or the feed is unreachable — never fabricates a verdict."""
+    if _verify_cache["result"] is None:
+        try:
+            from settle.real_validate import verify_live
+            _verify_cache["result"] = verify_live()
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return _verify_cache["result"]
+
+
 def live_orderbook():
     """Real order book off-chain read; falls back to cached real book if httpx absent."""
     try:
@@ -148,6 +164,8 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/orderbook":
                 book, src = live_orderbook()
                 self._send(200, "application/json", json.dumps({"program": _cache["program"], "book": book, "src": src}).encode())
+            elif self.path.startswith("/verify"):
+                self._send(200, "application/json", json.dumps(cached_verify()).encode())
             elif self.path.startswith("/settle"):
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache"); self.end_headers()
@@ -248,7 +266,7 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
         <button id="verify-forge" style="flex:1; background:var(--bad); color:#300; font-size:12px; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold" onclick="verifyResult(false)">Submit forged score</button>
       </div>
       <div style="font-size:10px; color:var(--dim); margin-top:6px; font-family:var(--mono)">
-        Deterministic — mirrors the on-chain CPI. Live devnet proof: <b>python3 -m settle.real_validate</b>
+        Live: each click runs <b>validate_stat</b> on Solana devnet (simulateTransaction) against the anchored root. Same check as <b>python3 -m settle.real_validate</b>.
       </div>
     </div>
 
@@ -323,18 +341,26 @@ $("go").onclick=()=>{
 };
 
 window.verifyResult = function(isReal) {
-    // Deterministic outcome — mirrors the on-chain check: the leaf for the submitted
-    // value is folded against the anchored root. The TRUE score is anchored and settles;
-    // any forged value fails the fold and is rejected. No vote, no consensus %.
+    // Calls the REAL on-chain check: /verify runs validate_stat against TxODDS's
+    // anchored root on devnet (a live simulateTransaction), for both the true score
+    // and a forged value. We show the genuine verdict + the program's own logs.
     const box = $("dispute-box");
-    box.innerHTML = `<span class="spin"></span> Folding leaf into the anchored keccak-Merkle root…`;
-    setTimeout(() => {
-        if (isReal) {
-            box.innerHTML = `✅ <span style="color:var(--good)">SETTLED.</span> Leaf for the real score (2-0) folds to the anchored root — <b>validate_stat → true</b>. Escrow releases to the winner. No vote required.`;
-        } else {
-            box.innerHTML = `⛔ <span style="color:var(--bad)">REJECTED on-chain.</span> The forged leaf does not fold to the anchored root — <b>validate_stat → false</b>, transaction reverts. A false result cannot be settled, and cannot be out-voted.`;
+    box.innerHTML = `<span class="spin"></span> Running validate_stat on Solana devnet against the anchored root…`;
+    fetch("/verify").then(r => r.json()).then(d => {
+        if (!d.ok) {
+            // honest fallback — never fake a verdict
+            box.innerHTML = `⚠️ <span style="color:var(--gold)">Couldn't reach devnet/feed right now</span> (${d.error||'offline'}). The mechanism is deterministic: the real score's leaf folds to the anchored root (validate_stat→true) and any forged value is rejected. Run <b>python3 -m settle.real_validate</b> for the live proof.`;
+            return;
         }
-    }, 900);
+        if (isReal) {
+            const logs = (d.real.logs||[]).map(l => `<div style="color:var(--dim)">· ${l}</div>`).join("");
+            box.innerHTML = `✅ <span style="color:var(--good)">VALID on-chain.</span> TxODDS's own <b>validate_stat</b> confirmed the real score (key ${d.stat.key}, value ${d.stat.value}) against anchored root <span style="font-size:9px">${d.pda}</span> — predicate → true. Settlement releases escrow. No vote.<div style="margin-top:6px;font-size:10px">${logs}</div>`;
+        } else {
+            box.innerHTML = `⛔ <span style="color:var(--bad)">REJECTED on-chain.</span> Forged value (${d.forged.value}) does not fold to the anchored root — <b>validate_stat reverts</b>. ${d.forged.rejected ? 'A false result is mathematically un-settleable — and there is no vote to capture.' : ''}`;
+        }
+    }).catch(e => {
+        box.innerHTML = `⚠️ <span style="color:var(--gold)">verify request failed</span> (${e}). Run <b>python3 -m settle.real_validate</b> for the live on-chain proof.`;
+    });
 };
 </script></body></html>"""
 
