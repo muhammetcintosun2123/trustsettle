@@ -22,7 +22,10 @@ from txline import live_mainnet as L, live_feed as F
 from settle import onchain_market as OM
 
 # Configuration
-SPREAD_VIG = 0.025  # The AMM aims for a 2.5% guaranteed profit margin over time
+SPREAD_VIG = 0.025  # 2.5% target spread (vig). This is a THEORETICAL edge, realized only
+                    # on balanced two-sided flow — it is not a guaranteed profit; adverse
+                    # selection / one-sided flow can still lose. The MEV pause below is what
+                    # limits the worst case (pulling quotes on toxic drift).
 MAX_EXPOSURE_PER_MATCH = 50_000_000  # Lamports (0.05 SOL) max risk per side
 TOXIC_DRIFT_THRESHOLD = 0.15  # 15% sudden shift means a major real-world event (Goal/Red Card)
 

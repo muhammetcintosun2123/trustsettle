@@ -207,9 +207,9 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <div class="book"><table><thead><tr><th>intent</th><th>maker</th><th>fixture</th><th>stake</th><th>state</th></tr></thead><tbody id="book"></tbody></table></div>
     <p class="hint" id="prg">reading deployed program…</p>
     
-    <h2 style="margin-top:24px">🤖 AMM Sentinel Operations (High-Frequency Quoter)</h2>
+    <h2 style="margin-top:24px">🤖 AMM Sentinel Operations (High-Frequency Quoter) <span style="color:var(--dim); font-size:9px; border:1px solid var(--dim); border-radius:4px; padding:1px 5px; vertical-align:middle">SIMULATED</span></h2>
     <div style="margin-top:8px; padding:12px; background:#040806; border:1px solid var(--edge); border-radius:12px; height:180px; overflow-y:auto; font-family:var(--mono); font-size:11px; display:flex; flex-direction:column-reverse; gap:4px" id="amm-term">
-      <div style="color:var(--gold)">🤖 AMM Sentinel active. Scanning devnet mempool and TxLINE feeds...</div>
+      <div style="color:var(--gold)">🤖 AMM Sentinel — simulated quoting loop (the real engine is settle/amm.py). Streaming illustrative ticks…</div>
     </div>
   </div>
   <div class="panel">
@@ -219,9 +219,9 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     
     <!-- LST Yield Simulation Panel -->
     <div style="margin-top:20px; padding:12px; border:1px solid var(--mint); background:rgba(63,224,200,0.1); border-radius:8px">
-      <h3 style="margin:0 0 8px; font-size:12px; color:var(--mint); text-transform:uppercase">🌱 LST Yield-Bearing Escrow</h3>
+      <h3 style="margin:0 0 8px; font-size:12px; color:var(--mint); text-transform:uppercase">🌱 LST Yield-Bearing Escrow <span style="color:var(--dim); font-size:9px; border:1px solid var(--dim); border-radius:4px; padding:1px 5px; margin-left:4px">ILLUSTRATIVE</span></h3>
       <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
-        Funds locked in the prediction market are automatically staked into jitoSOL to earn yield while the 90-minute match is played. Zero opportunity cost.
+        Roadmap concept: lock funds into jitoSOL to earn yield while the 90-minute match plays, for zero opportunity cost. The TVL/yield figures below are an illustrative projection (8% APY), not live staking — the on-chain escrow + settlement CPI are the parts that are real on devnet.
       </div>
       <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:14px; margin-bottom:4px">
         <span>Total Value Locked (TVL):</span> <span id="tvl" style="color:white">0.00 SOL</span>
@@ -231,16 +231,25 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
       </div>
     </div>
     
-    <!-- Dispute Court Simulation Panel -->
+    <!-- Merkle Settlement Verifier: TrustSettle's real, vote-free settlement -->
     <div style="margin-top:20px; padding:12px; border:1px solid var(--gold); background:rgba(255,206,92,0.06); border-radius:8px">
-      <h3 style="margin:0 0 8px; font-size:12px; color:var(--gold); text-transform:uppercase">⚖️ TrustSettle Validator Court</h3>
+      <h3 style="margin:0 0 8px; font-size:12px; color:var(--gold); text-transform:uppercase">🔐 Merkle Settlement Verifier — no vote, just proof</h3>
       <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
-        Is the oracle result contested? Dispute a settlement to invoke the decentralized court.
+        Vote-based oracles can be captured — in 2026, Polymarket's UMA saw markets resolve against the
+        evidence when a few large wallets controlled the vote. TrustSettle removes the vote entirely:
+        a result settles only if its leaf folds (keccak Merkle) into TxODDS's <b>on-chain anchored
+        scores root</b>. A forged score is rejected deterministically — there is nothing to out-vote.
       </div>
       <div id="dispute-box" style="padding:10px; background:#070b12; border:1px solid var(--edge); border-radius:8px; font-family:var(--mono); font-size:11px">
-        <span style="color:var(--dim)">⚖️ No active disputes. All settlements validated by the oracle CPI.</span>
+        <span style="color:var(--dim)">Submit a result to verify it against the anchored root.</span>
       </div>
-      <button id="dispute-btn" style="margin-top:8px; background:var(--gold); color:#320; font-size:13px; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; width:100%" onclick="raiseDispute()">Raise Dispute on Last Market</button>
+      <div style="display:flex; gap:6px; margin-top:8px">
+        <button id="verify-true" style="flex:1; background:var(--good); color:#062; font-size:12px; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold" onclick="verifyResult(true)">Submit real score (2-0)</button>
+        <button id="verify-forge" style="flex:1; background:var(--bad); color:#300; font-size:12px; padding:8px; border:none; border-radius:6px; cursor:pointer; font-weight:bold" onclick="verifyResult(false)">Submit forged score</button>
+      </div>
+      <div style="font-size:10px; color:var(--dim); margin-top:6px; font-family:var(--mono)">
+        Deterministic — mirrors the on-chain CPI. Live devnet proof: <b>python3 -m settle.real_validate</b>
+      </div>
     </div>
 
   </div>
@@ -313,27 +322,19 @@ $("go").onclick=()=>{
   es.addEventListener("done",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">🔒 ${d.msg}</div>`);$("go").disabled=false;es.close();});
 };
 
-window.raiseDispute = function() {
-    const btn = $("dispute-btn");
+window.verifyResult = function(isReal) {
+    // Deterministic outcome — mirrors the on-chain check: the leaf for the submitted
+    // value is folded against the anchored root. The TRUE score is anchored and settles;
+    // any forged value fails the fold and is rejected. No vote, no consensus %.
     const box = $("dispute-box");
-    btn.disabled = true;
-    btn.style.opacity = 0.6;
-    box.innerHTML = `🚨 <span style="color:var(--bad)">[DISPUTE ACTIVE]</span> Contesting Fixture 17952170 result! Validator voting pool opening...<br>
-    <button class="dl-btn" style="padding:4px 8px;font-size:11px;margin-top:6px;width:48%;background:var(--good);color:#111;border:none;border-radius:4px;cursor:pointer" onclick="voteDispute('YES')">Vote: Root Is True</button>
-    <button class="dl-btn" style="padding:4px 8px;font-size:11px;margin-top:6px;width:48%;background:var(--bad);color:#111;border:none;border-radius:4px;cursor:pointer;float:right" onclick="voteDispute('NO')">Vote: Root Is Forged</button>`;
-};
-
-window.voteDispute = function(vote) {
-    const box = $("dispute-box");
-    box.innerHTML = `🗳️ Cast vote: <b>${vote}</b>. Broadcasting vote to Solana devnet...<br>
-    <span class="spin"></span> Awaiting validator consensus (needs 66% weight)...`;
-    
+    box.innerHTML = `<span class="spin"></span> Folding leaf into the anchored keccak-Merkle root…`;
     setTimeout(() => {
-        box.innerHTML = `✓ Vote recorded! Validator consensus complete.<br>
-        <span style="color:var(--good)">[Consensus Result] 99.1% Root Is True. Dispute resolved. Forger slashed, validators rewarded!</span>`;
-        $("dispute-btn").disabled = false;
-        $("dispute-btn").style.opacity = 1;
-    }, 1800);
+        if (isReal) {
+            box.innerHTML = `✅ <span style="color:var(--good)">SETTLED.</span> Leaf for the real score (2-0) folds to the anchored root — <b>validate_stat → true</b>. Escrow releases to the winner. No vote required.`;
+        } else {
+            box.innerHTML = `⛔ <span style="color:var(--bad)">REJECTED on-chain.</span> The forged leaf does not fold to the anchored root — <b>validate_stat → false</b>, transaction reverts. A false result cannot be settled, and cannot be out-voted.`;
+        }
+    }, 900);
 };
 </script></body></html>"""
 
