@@ -116,6 +116,41 @@ def main() -> int:
     for who, amt in sorted(payouts.items()):
         print(f"   → {who} collects {amt:.1f}  (staked YES, split the losing NO pool pro-rata)")
 
+    # ⑦ AMM edge — measured on REAL odds, not asserted
+    print("\n⑦ AMM edge, measured on REAL World Cup odds (not asserted):")
+    try:
+        from . import amm_backtest as B
+        r = B.run()["aggregate"]
+        st = B.stress_goal_shock()
+        print(f"   Over {r['ticks']} real de-vigged ticks, the 2.5% spread survives "
+              f"{r['quote_survival_pct']}% of market moves")
+        print(f"   (median tick move {r['median_move_pct']}%, p95 {r['p95_move_pct']}%) "
+              f"→ ~{r['mean_edge_captured_bps']:.0f} bps captured per unit of benign flow.")
+        print(f"   MEV breaker (stress test): a {st['shock_pp']:.0f}pp goal shock fires the "
+              f"pull, avoiding a {st['pickoff_avoided_bps']:.0f} bps stale-quote pick-off.")
+        print("   (Per-unit-filled economics only — no taker volume in a de-vigged "
+              "consensus, so no total P&L is claimed.)")
+    except Exception as e:
+        print(f"   (skipped: {e})")
+
+    # ⑧ settle on a REAL played fixture's PROVEN result (needs the live feed + devnet)
+    print("\n⑧ Real result, cryptographically proven (a played World Cup fixture):")
+    try:
+        from . import real_result as RR
+        RR.L.set_network("devnet")
+        r = RR.resolve(18209181)      # France v Morocco
+        if r.get("finalised") and r.get("outcome"):
+            badge = {"1": "HOME win", "X": "DRAW", "2": "AWAY win"}[r["outcome"]]
+            print(f"   fixture 18209181 finalised {r['home']}-{r['away']} → {r['outcome']} ({badge})")
+            print(f"   home & away goal counts (period 100) proven on devnet: "
+                  f"{'✅ validate_stat confirms both' if r['proven_onchain'] else '⚠ chain unavailable'}")
+            print("   → a market on this fixture settles on THIS, with no oracle vote. "
+                  "(python -m settle.real_result)")
+        else:
+            print(f"   (fixture not finalised on the feed: {r.get('reason')})")
+    except Exception as e:
+        print(f"   (skipped — needs live feed + devnet: {e})")
+
     print("\n" + "=" * 64)
     print(" Settlement is driven only by Merkle-proven, on-chain-anchored data.")
     print(" No oracle, no admin key, no way to settle on a lie.")

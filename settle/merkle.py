@@ -15,11 +15,16 @@ Fold rule (standard, matching a sibling-side flag):
     if sibling.is_right_sibling:  parent = H(node ‖ sibling.hash)
     else:                         parent = H(sibling.hash ‖ node)
 
-Hash = keccak256, the same primitive Solana exposes as `keccak::hashv` — so a proof
-verified here is byte-for-byte the proof a CPI into `validate_stat` would accept.
-The leaf encoding is pluggable (TxODDS's exact field packing lives in their program);
-our tree builder and verifier use one consistent encoding, so the engine is internally
-sound and the *verification algorithm* is the real one.
+This module demonstrates the *verification algorithm* (fold-to-root) with keccak256 over
+a self-consistent leaf encoding, so the escrow logic is testable end-to-end. It is NOT a
+claim to reproduce TxODDS's exact byte layout — their leaf packing and hash choice live in
+their program (community notes indicate the scores leaf is SHA-256 over key‖period, and V3
+adds compressed multiproofs), and we deliberately do not reconstruct it here.
+
+The AUTHORITATIVE, non-reimplemented check is `settle/real_validate.py`: it submits the
+REAL proof returned by TxODDS's `/api/scores/stat-validation` API into TxODDS's OWN
+on-chain `validate_stat`, so the hashing is done by their program, not ours — a real score
+validates and a forged one is rejected on devnet, verifiable independently of this file.
 """
 from __future__ import annotations
 

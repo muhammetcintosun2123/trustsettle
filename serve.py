@@ -51,6 +51,56 @@ def cached_verify():
     return _verify_cache["result"]
 
 
+_verify_v3_cache = {"result": None}
+
+
+def cached_verify_v3():
+    """Same real on-chain check, but against TxODDS's CURRENT primitive `validate_stat_v3`
+    (compressed multiproof — many leaves, one proof). No visible rival settles on V3."""
+    if _verify_v3_cache["result"] is None:
+        try:
+            from settle.real_validate_v3 import verify_live as vv3
+            _verify_v3_cache["result"] = vv3()
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return _verify_v3_cache["result"]
+
+
+_amm_cache = {"result": None}
+
+
+def cached_amm_risk():
+    """The AMM's edge MEASURED on the real cached World Cup odds path (settle.amm_backtest).
+
+    This replaced a decorative terminal that streamed `Math.random()` quotes. Same panel,
+    real numbers: spread adequacy vs actual tick volatility + the MEV breaker stress test.
+    No taker volume exists in a de-vigged consensus, so no P&L is claimed."""
+    if _amm_cache["result"] is None:
+        try:
+            from settle import amm_backtest as B
+            out = B.run()
+            agg = out["aggregate"]
+            st = B.stress_goal_shock()
+            _amm_cache["result"] = {
+                "ok": True,
+                "ticks": agg["ticks"],
+                "fixtures": [r["fixture"] for r in out["per_fixture"]],
+                "spread_pct": out["spread_pct"],
+                "survival_pct": agg["quote_survival_pct"],
+                "median_move_pct": agg["median_move_pct"],
+                "p95_move_pct": agg["p95_move_pct"],
+                "edge_bps": agg["mean_edge_captured_bps"],
+                "toxic_events": agg["toxic_events"],
+                "stress_shock_pp": st["shock_pp"],
+                "stress_fires": st["breaker_fires"],
+                "stress_avoided_bps": st["pickoff_avoided_bps"],
+                "note": out["note"],
+            }
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return _amm_cache["result"]
+
+
 def live_orderbook():
     """Real order book off-chain read; falls back to cached real book if httpx absent."""
     try:
@@ -164,8 +214,12 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/orderbook":
                 book, src = live_orderbook()
                 self._send(200, "application/json", json.dumps({"program": _cache["program"], "book": book, "src": src}).encode())
+            elif self.path.startswith("/verify-v3"):
+                self._send(200, "application/json", json.dumps(cached_verify_v3()).encode())
             elif self.path.startswith("/verify"):
                 self._send(200, "application/json", json.dumps(cached_verify()).encode())
+            elif self.path.startswith("/ammrisk"):
+                self._send(200, "application/json", json.dumps(cached_amm_risk()).encode())
             elif self.path.startswith("/settle"):
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache"); self.end_headers()
@@ -225,9 +279,9 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <div class="book"><table><thead><tr><th>intent</th><th>maker</th><th>fixture</th><th>stake</th><th>state</th></tr></thead><tbody id="book"></tbody></table></div>
     <p class="hint" id="prg">reading deployed program…</p>
     
-    <h2 style="margin-top:24px">🤖 AMM Sentinel Operations (High-Frequency Quoter) <span style="color:var(--dim); font-size:9px; border:1px solid var(--dim); border-radius:4px; padding:1px 5px; vertical-align:middle">SIMULATED</span></h2>
-    <div style="margin-top:8px; padding:12px; background:#040806; border:1px solid var(--edge); border-radius:12px; height:180px; overflow-y:auto; font-family:var(--mono); font-size:11px; display:flex; flex-direction:column-reverse; gap:4px" id="amm-term">
-      <div style="color:var(--gold)">🤖 AMM Sentinel — simulated quoting loop (the real engine is settle/amm.py). Streaming illustrative ticks…</div>
+    <h2 style="margin-top:24px">🤖 AMM Edge — <span style="color:var(--mint)">measured on real World Cup odds</span> <span style="color:var(--mint); font-size:9px; border:1px solid var(--mint); border-radius:4px; padding:1px 5px; vertical-align:middle">MEASURED</span></h2>
+    <div style="margin-top:8px; padding:12px; background:#040806; border:1px solid var(--edge); border-radius:12px; font-family:var(--mono); font-size:11px" id="amm-risk">
+      <div style="color:var(--dim)">measuring the AMM against the real de-vigged odds path…</div>
     </div>
   </div>
   <div class="panel">
@@ -235,20 +289,15 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
     <button class="go" id="go">▶ Run create → join → settle on devnet</button>
     <div class="feed" id="feed" style="margin-top:12px"></div>
     
-    <!-- LST Yield Simulation Panel -->
-    <div style="margin-top:20px; padding:12px; border:1px solid var(--mint); background:rgba(63,224,200,0.1); border-radius:8px">
-      <h3 style="margin:0 0 8px; font-size:12px; color:var(--mint); text-transform:uppercase">🌱 LST Yield-Bearing Escrow <span style="color:var(--dim); font-size:9px; border:1px solid var(--dim); border-radius:4px; padding:1px 5px; margin-left:4px">ILLUSTRATIVE</span></h3>
-      <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
-        Roadmap concept: lock funds into jitoSOL to earn yield while the 90-minute match plays, for zero opportunity cost. The TVL/yield figures below are an illustrative projection (8% APY), not live staking — the on-chain escrow + settlement CPI are the parts that are real on devnet.
-      </div>
-      <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:14px; margin-bottom:4px">
-        <span>Total Value Locked (TVL):</span> <span id="tvl" style="color:white">0.00 SOL</span>
-      </div>
-      <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:14px">
-        <span>Accumulated Yield:</span> <span id="yield" style="color:var(--good)">+0.00000000 SOL</span>
+    <!-- LST yield: a roadmap note, not a fake live ticker. The projected TVL/yield numbers
+         that used to animate here added nothing but doubt next to a real on-chain proof. -->
+    <div style="margin-top:20px; padding:10px 12px; border:1px dashed var(--edge); border-radius:8px">
+      <h3 style="margin:0 0 4px; font-size:11px; color:var(--dim); text-transform:uppercase">🌱 Roadmap · LST yield-bearing escrow</h3>
+      <div style="font-size:11px; color:var(--mut)">
+        Not built: escrowed stake could sit in jitoSOL for the 90 minutes a match runs, so locking capital costs nothing. Listed as future work — deliberately no numbers, because we haven't built it.
       </div>
     </div>
-    
+
     <!-- Merkle Settlement Verifier: TrustSettle's real, vote-free settlement -->
     <div style="margin-top:20px; padding:12px; border:1px solid var(--gold); background:rgba(255,206,92,0.06); border-radius:8px">
       <h3 style="margin:0 0 8px; font-size:12px; color:var(--gold); text-transform:uppercase">🔐 Merkle Settlement Verifier — no vote, just proof</h3>
@@ -270,55 +319,58 @@ td{padding:6px 7px;border-bottom:1px solid var(--edge);font-family:var(--mono);f
       </div>
     </div>
 
+    <!-- V3: settling on TxODDS's CURRENT primitive (compressed multiproof) -->
+    <div style="margin-top:16px; padding:12px; border:1px solid var(--mint); background:rgba(63,224,200,0.06); border-radius:8px">
+      <h3 style="margin:0 0 8px; font-size:12px; color:var(--mint); text-transform:uppercase">⚡ On the CURRENT primitive: validate_stat_v3 <span style="font-size:9px; border:1px solid var(--mint); border-radius:4px; padding:1px 5px">MULTIPROOF</span></h3>
+      <div style="font-size:12px; color:var(--mut); margin-bottom:8px">
+        V1 proves one stat per Merkle proof. <b>V3</b> proves <b>many leaves with a single compressed multiproof</b> (shared hashes + leaf indices), combined by an N-dimensional strategy. We settle on the newest primitive — verified live on devnet.
+      </div>
+      <div id="v3-box" style="padding:10px; background:#070b12; border:1px solid var(--edge); border-radius:8px; font-family:var(--mono); font-size:11px">
+        <span style="color:var(--dim)">running validate_stat_v3 on devnet…</span>
+      </div>
+      <div style="font-size:10px; color:var(--dim); margin-top:6px; font-family:var(--mono)">
+        Reproduce: <b>python3 -m settle.real_validate_v3</b>
+      </div>
+    </div>
+
   </div>
 </div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-let globalTvl = 0.0;
 fetch("/orderbook").then(r=>r.json()).then(d=>{
   $("prg").textContent="program "+d.program.slice(0,8)+"… · "+d.book.length+" real orders ("+d.src+") · public chain state";
   $("book").innerHTML=d.book.map(o=>`<tr><td>${o.id}</td><td>${o.maker}</td><td>${o.fixture}</td><td>${o.stake.toFixed(2)}</td><td><span class="pill">${o.state}</span></td>`).join("")||'<tr><td colspan=5>—</td></tr>';
-  
-  // Calculate TVL for the Yield Simulator
-  globalTvl = d.book.reduce((sum, o) => sum + (o.stake * 2), 0); // Maker + Taker
-  $("tvl").textContent = globalTvl.toFixed(2) + " SOL";
 }).catch(()=>{});
 
-// Yield Simulator (8% APY ticking per second)
-setInterval(() => {
-    if(globalTvl > 0) {
-        const yieldPerSec = globalTvl * (0.08 / (365 * 24 * 60 * 60));
-        let cur = parseFloat($("yield").textContent.replace("+","").replace(" SOL",""));
-        cur += yieldPerSec;
-        $("yield").textContent = `+${cur.toFixed(8)} SOL`;
-    }
-}, 1000);
+// V3 — validate on TxODDS's current primitive (compressed multiproof), live on devnet.
+fetch("/verify-v3").then(r=>r.json()).then(d=>{
+  if(!d.ok){ $("v3-box").innerHTML='<span style="color:var(--dim)">V3 check offline: '+(d.error||"")+'</span>'; return; }
+  const leaves = d.leaves.map(l=>`key ${l.key}=${l.value}`).join(" · ");
+  $("v3-box").innerHTML =
+    `<div style="color:var(--mint)">${d.leaves.length} real leaves · ONE multiproof (${d.multiproof_hashes} shared hashes, indices ${JSON.stringify(d.leaf_indices)})</div>`
+    + `<div style="color:var(--dim);margin:4px 0">${leaves}</div>`
+    + (d.real.valid ? '<div style="color:var(--good)">✅ VALID — validate_stat_v3 confirms every leaf in one shot</div>' : '<div style="color:var(--bad)">✗ not valid</div>')
+    + (d.forged.rejected ? '<div style="color:var(--bad)">🛡️ forged leaf → REJECTED on-chain (breaks the shared multiproof)</div>' : '');
+}).catch(()=>{ $("v3-box").innerHTML='<span style="color:var(--dim)">V3 check unavailable offline</span>'; });
 
-// AMM High-Frequency Simulation Logger
-setInterval(() => {
-    if(Math.random() > 0.4) {
-        const d = document.createElement("div");
-        d.style.color = "var(--mut)";
-        const odds = (1.5 + Math.random()).toFixed(3);
-        const amount = (100 + Math.random()*400).toFixed(2);
-        d.innerHTML = `<span style="color:var(--mint)">[AMM TICK]</span> Re-pricing liquidity bounds. Quoting $${amount} @ ${odds} limits.`;
-        $("amm-term").prepend(d);
-        
-        // 5% chance to show the Circuit Breaker logic
-        if(Math.random() > 0.95) {
-            const m = document.createElement("div");
-            m.style.color = "var(--bad)";
-            m.innerHTML = `🚨 <span style="font-weight:bold">[CIRCUIT BREAKER]</span> Toxic flow detected (Price Impact > 15%). Widening spreads to defend LP.`;
-            $("amm-term").prepend(m);
-        }
-        
-        // Keep terminal clean (max 50 lines)
-        if($("amm-term").children.length > 50) {
-            $("amm-term").lastChild.remove();
-        }
-    }
-}, 1200);
+// AMM edge — real numbers off settle.amm_backtest (was a Math.random() ticker).
+fetch("/ammrisk").then(r=>r.json()).then(a=>{
+  if(!a.ok){ $("amm-risk").innerHTML='<div style="color:var(--dim)">AMM measurement unavailable: '+(a.error||"")+'</div>'; return; }
+  const row=(k,v,c)=>`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--mut)">${k}</span><span style="color:${c||"#fff"}">${v}</span></div>`;
+  $("amm-risk").innerHTML =
+    `<div style="color:var(--mint);margin-bottom:6px">measured over <b>${a.ticks}</b> real de-vigged ticks · ${a.fixtures.join(" · ")}</div>`
+    + row("quoted spread", a.spread_pct+"%")
+    + row("spread survives real moves", a.survival_pct+"%", "var(--good)")
+    + row("median tick move", a.median_move_pct+"%")
+    + row("p95 tick move", a.p95_move_pct+"%")
+    + row("edge captured / unit filled", a.edge_bps.toFixed(0)+" bps", "var(--good)")
+    + row("toxic drifts on this path", a.toxic_events)
+    + `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--edge);color:var(--gold)">MEV breaker · stress test (modeled ${a.stress_shock_pp}pp goal shock, not a feed reading)</div>`
+    + row("breaker fires", a.stress_fires ? "YES" : "no", a.stress_fires ? "var(--good)" : "var(--dim)")
+    + row("stale-quote pick-off avoided", a.stress_avoided_bps.toFixed(0)+" bps", "var(--good)")
+    + `<div style="margin-top:8px;color:var(--dim);font-size:10px">${a.note}</div>`;
+}).catch(()=>{});
 
 $("go").onclick=()=>{
   $("go").disabled=true;$("feed").innerHTML='<div class="ev"><span class="spin"></span>settling on devnet…</div>';
@@ -328,14 +380,6 @@ $("go").onclick=()=>{
   es.addEventListener("tx",e=>{
     const d=JSON.parse(e.data);
     add("tx",`<div class="msg">✅ ${d.label}</div><a href="https://explorer.solana.com/tx/${d.sig}?cluster=devnet" target="_blank">${d.sig.slice(0,28)}…</a>`);
-    
-    // Dynamically update TVL when user interacts with the contract!
-    if(d.label.includes("escrows") || d.label.includes("escrowed")) {
-        globalTvl += 0.02; // Simulate maker/taker locking funds
-        $("tvl").textContent = globalTvl.toFixed(2) + " SOL";
-        $("tvl").style.color = "var(--mint)";
-        setTimeout(()=> $("tvl").style.color = "white", 500);
-    }
   });
   es.addEventListener("done",e=>{const d=JSON.parse(e.data);add("tx",`<div class="msg">🔒 ${d.msg}</div>`);$("go").disabled=false;es.close();});
 };
