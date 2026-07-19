@@ -1,6 +1,6 @@
 # TrustSettle — Superteam Submission (Paste-Ready)
 
-**Repo:** https://github.com/F1R3NDS/trustsettle
+**Repo:** https://github.com/muhammetcintosun2123/trustsettle
 **Track:** Prediction Markets and Settlement · TxODDS World Cup Hackathon
 
 ## One-Liner
